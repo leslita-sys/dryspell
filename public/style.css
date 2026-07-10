@@ -12,7 +12,7 @@
 
   --dry: #0ca30c;
   --drying: #eda100;
-  --wet: #52514e;
+  --wet: #d03b3b;
   --seep: #d95926;
   --rain: #2a78d6;
 
@@ -312,7 +312,18 @@ body {
   padding: 10px;
 }
 
-.corridor { width: 100%; max-height: 74vh; display: block; }
+.duo {
+  display: grid;
+  grid-template-columns: minmax(280px, 350px) 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .duo { grid-template-columns: 1fr; }
+}
+
+.corridor { width: 100%; display: block; }
 
 .corridor text {
   font-family: var(--mono);
@@ -323,6 +334,55 @@ body {
 }
 
 .corridor .water-label, .corridor .compass { fill: var(--ink-mut); }
+
+.section-sub {
+  margin: 8px 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+
+.timeline { width: 100%; display: block; }
+
+.timeline text {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  fill: var(--ink-soft);
+}
+
+.timeline .tick-clock { fill: var(--ink-mut); font-size: 10.5px; }
+.timeline .axis-name { fill: var(--ink-mut); }
+
+.tl-dot { cursor: pointer; }
+.tl-dot:hover circle, .tl-dot:focus-visible circle { stroke: var(--ink); }
+.tl-dot:hover .tl-label, .tl-dot:focus-visible .tl-label { text-decoration: underline; }
+.tl-dot:focus-visible { outline: none; }
+
+.grade-filter {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.grade-filter button {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--hairline);
+  border-radius: 0;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.grade-filter button:hover { background: var(--paper-warm); }
+.grade-filter button.active { background: var(--ink); color: var(--paper); }
 
 .map-dot { cursor: pointer; }
 .map-dot:hover text, .map-dot:focus-visible text { text-decoration: underline; }

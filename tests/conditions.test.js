@@ -58,6 +58,13 @@ test('verdictLabel formats Vancouver-local weekday and hour', () => {
   assert.match(verdictLabel('2026-07-18T13:00'), /^Dry (today|Sat) ~1 PM$/);
 });
 
+test('verdictLabel never calls a same-weekday date next week "today"', () => {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' });
+  const nextWeek = fmt.format(new Date(Date.now() + 7 * 86400e3)); // YYYY-MM-DD
+  const label = verdictLabel(`${nextWeek}T10:00`);
+  assert.ok(!label.includes('today'), `same weekday next week labeled: ${label}`);
+});
+
 test('ECMWF-only past rain still wets the bucket (conservative blend)', async () => {
   _reset();
   const p = await buildConditions({ fetchImpl: fakeFetch(true, { ecmwfOnlyRain: true }) });

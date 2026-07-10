@@ -17,7 +17,8 @@ const CONF_NOTE = {
 };
 
 let DATA = null;
-let VIEW = 'week';      // 'week' = 14-day window, 'today' = now-2h .. +24h
+let VIEW = 'week';      // 'week' = 14-day window, 'today' = now .. +24h
+let GRADE = 'all';      // timeline filter: 'all' | 'V0-2' | 'V3-6' | 'V7-9' | 'V10+'
 let PROBLEMS = null;    // lazy-loaded index of all 3,569 problem names
 
 async function load() {
@@ -54,8 +55,8 @@ function hikeLabel(a) {
 
 function viewWindow(a) {
   if (VIEW === 'today') {
-    const s0 = Math.max(0, a.nowIndex - 2);
-    return [s0, Math.min(a.series.length, a.nowIndex + 25)];
+    // window starts AT now so the left edge and the "now" captions agree
+    return [a.nowIndex, Math.min(a.series.length, a.nowIndex + 25)];
   }
   return [0, a.series.length];
 }
@@ -183,6 +184,7 @@ function render() {
       <div class="grid">${c.areas.map(cardHtml).join('')}</div>
     </details>`).join('');
 
+  renderTimeline();
   renderMap();
 
   document.querySelectorAll('[data-area]').forEach(el =>
@@ -215,17 +217,128 @@ function jumpToArea(areaName) {
 
 const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
+/* ---------- dry timeline: every area by hours-until-dry vs wetness now ---------- */
+
+const STATUS_COLOR = { dry: 'var(--dry)', drying: 'var(--drying)', wet: 'var(--wet)' };
+
+// zone status: green = everything dry, yellow = will be dry (something dries), red = wet
+function chapterStatus(c) {
+  if (c.areas.every(a => a.verdict.status === 'dry')) return 'dry';
+  if (c.areas.some(a => a.verdict.status !== 'wet')) return 'drying';
+  return 'wet';
+}
+
+function dryHours(a) {
+  if (a.verdict.status === 'dry') return 0;
+  if (!a.verdict.dryAt) return Infinity;
+  const idx = a.times.indexOf(a.verdict.dryAt);
+  return idx >= 0 ? Math.max(0, idx - a.nowIndex) : Infinity;
+}
+
+function bandCount(a, bandKey) {
+  if (bandKey === 'all') return a.problems;
+  return a.grade_bands?.[bandKey] ?? 0;
+}
+
+function renderTimeline() {
+  const W = 1000, H = 540, P = { l: 64, r: 40, t: 34, b: 44 };
+  const MAXH = 24;
+  const laneW = 110;                      // right-hand "not today" lane
+  const plotR = W - P.r - laneW;
+
+  const all = DATA.chapters.flatMap(c => c.areas)
+    .filter(a => bandCount(a, GRADE) > 0);
+
+  const items = all.map(a => {
+    const hrs = dryHours(a);
+    return { a, hrs: hrs <= MAXH ? hrs : null };       // null -> later lane
+  });
+
+  const wetMax = Math.max(0.05, ...all.map(a => a.currentIn));
+  const x = it => it.hrs === null
+    ? plotR + laneW / 2
+    : P.l + (it.hrs / MAXH) * (plotR - P.l);
+  const y = it => H - P.b - (it.a.currentIn / wetMax) * (H - P.t - P.b);
+
+  // spiral collision relief so piled dots stay individually clickable
+  const placed = [];
+  const pos = it => {
+    let px = x(it), py = y(it);
+    for (let k = 0; k < 80; k++) {
+      const hit = placed.some(p => (p[0] - px) ** 2 + (p[1] - py) ** 2 < 15 ** 2);
+      if (!hit) break;
+      const ang = k * 2.4, rad = 9 + k * 2.1;
+      px = Math.min(W - 12, Math.max(14, x(it) + rad * Math.cos(ang)));
+      py = Math.min(H - P.b - 8, Math.max(P.t + 8, y(it) + rad * Math.sin(ang)));
+    }
+    placed.push([px, py]);
+    return [px, py];
+  };
+
+  const ticks = [];
+  const ref = DATA.chapters[0].areas[0];
+  for (let k = 0; k <= MAXH; k += 6) {
+    const tx = P.l + (k / MAXH) * (plotR - P.l);
+    const t = ref.times[ref.nowIndex + k];
+    const clock = t ? new Date(t.slice(0, 10) + 'T' + t.slice(11) + ':00')
+      .toLocaleTimeString('en-US', { hour: 'numeric' }) : '';
+    ticks.push(`<line x1="${tx}" y1="${P.t}" x2="${tx}" y2="${H - P.b}" stroke="rgba(0,0,0,0.12)"/>` +
+      (k === MAXH ? '' : `<text x="${tx}" y="${H - P.b + 20}" text-anchor="middle">${k === 0 ? 'NOW' : `+${k}H`}</text>
+      <text x="${tx}" y="${H - P.b + 34}" text-anchor="middle" class="tick-clock">${k === 0 ? '' : clock}</text>`));
+  }
+
+  const dots = items.map(it => {
+    const [px, py] = pos(it);
+    const color = STATUS_COLOR[it.a.verdict.status];
+    const n = bandCount(it.a, GRADE);
+    const gradeNote = GRADE === 'all' ? '' : ` · ${n} in ${GRADE}`;
+    return `
+    <g class="tl-dot" data-tl="${encodeURIComponent(it.a.name)}" tabindex="0" role="button"
+       aria-label="${it.a.name}: ${it.a.verdict.label}">
+      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="6" fill="${color}" stroke="var(--paper)" stroke-width="2"/>
+      <title>${it.a.name} · ${it.a.verdict.label}${gradeNote}${it.a.currentIn > 0 ? ` · ${it.a.currentIn}″ on rock` : ''}</title>
+    </g>`;
+  }).join('');
+
+  document.getElementById('timelineWrap').innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" class="timeline" role="img"
+       aria-label="Areas plotted by hours until dry and current wetness">
+    <line x1="${P.l}" y1="${H - P.b}" x2="${plotR}" y2="${H - P.b}" stroke="var(--ink)"/>
+    <line x1="${plotR + 8}" y1="${P.t}" x2="${plotR + 8}" y2="${H - P.b}" stroke="rgba(0,0,0,0.25)" stroke-dasharray="3 4"/>
+    ${ticks.join('')}
+    <text x="${plotR + laneW / 2}" y="${H - P.b + 20}" text-anchor="middle">NOT TODAY</text>
+    <text x="14" y="${P.t + 4}" class="axis-name">WETTER</text>
+    <text x="14" y="${H - P.b - 6}" class="axis-name">DRIER</text>
+    <g class="legend">
+      <circle cx="${plotR - 310}" cy="${P.t - 14}" r="5" fill="var(--dry)"/><text x="${plotR - 300}" y="${P.t - 10}">DRY</text>
+      <circle cx="${plotR - 230}" cy="${P.t - 14}" r="5" fill="var(--drying)"/><text x="${plotR - 220}" y="${P.t - 10}">WILL BE DRY</text>
+      <circle cx="${plotR - 90}" cy="${P.t - 14}" r="5" fill="var(--wet)"/><text x="${plotR - 80}" y="${P.t - 10}">WET</text>
+    </g>
+    ${dots}
+  </svg>`;
+  document.getElementById('overviewSection').hidden = false;
+
+  document.querySelectorAll('.tl-dot').forEach(el => {
+    const go = () => openDetail(decodeURIComponent(el.dataset.tl));
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+
+  const gradeRow = document.getElementById('gradeFilter');
+  gradeRow.querySelectorAll('button').forEach(b =>
+    b.classList.toggle('active', b.dataset.grade === GRADE));
+}
+
 function renderMap() {
   const W = 360, H = 620, PAD = 46;
   const chapters = DATA.chapters.map(c => {
     const lats = c.areas.map(a => a.lat), lons = c.areas.map(a => a.lon);
-    const dry = c.areas.filter(a => a.verdict.status === 'dry').length;
     return {
       name: c.name,
       lat: lats.reduce((s, v) => s + v, 0) / lats.length,
       lon: lons.reduce((s, v) => s + v, 0) / lons.length,
       problems: c.areas.reduce((s, a) => s + a.problems, 0),
-      dryShare: dry / c.areas.length,
+      status: chapterStatus(c),
     };
   });
   const lats = chapters.map(c => c.lat), lons = chapters.map(c => c.lon);
@@ -251,7 +364,7 @@ function renderMap() {
 
   const dots = placed.map(c => {
     const r = Math.max(9, Math.min(20, 6 + Math.sqrt(c.problems) / 2.4));
-    const color = c.dryShare === 1 ? 'var(--dry)' : c.dryShare >= 0.5 ? 'var(--drying)' : 'var(--wet)';
+    const color = STATUS_COLOR[c.status];
     return `
     <g class="map-dot" data-chapter="${slug(c.name)}" tabindex="0" role="button" aria-label="${c.name}">
       <circle cx="${c.cx.toFixed(1)}" cy="${c.cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${color}" opacity="0.16"/>
@@ -270,7 +383,7 @@ function renderMap() {
     ${dots}
     <text x="${W - 10}" y="22" text-anchor="end" class="compass">N &uarr;</text>
   </svg>`;
-  document.getElementById('mapSection').hidden = false;
+  document.getElementById('overviewSection').hidden = false;
 
   document.querySelectorAll('.map-dot').forEach(el => {
     const go = () => document.getElementById(`ch-${el.dataset.chapter}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -313,7 +426,7 @@ function openDetail(name) {
       <p class="conf-note">${CONF_NOTE[a.confidence]}</p>
       ${sparkSvg(a, { w: 640, h: 190, big: true })}
       <div class="axis-cap">${VIEW === 'today'
-        ? '<span>2 h ago</span><span>now</span><span>+24 h</span>'
+        ? '<span>now</span><span>+12 h</span><span>+24 h</span>'
         : '<span>7 days ago</span><span>now</span><span>+7 days</span>'}</div>
       ${seep}${notes}
       <table class="rain-table">
@@ -380,6 +493,13 @@ document.addEventListener('click', e => {
 document.getElementById('viewToggle').addEventListener('click', () => {
   VIEW = VIEW === 'week' ? 'today' : 'week';
   render();
+});
+
+document.getElementById('gradeFilter').addEventListener('click', e => {
+  const b = e.target.closest('button[data-grade]');
+  if (!b) return;
+  GRADE = b.dataset.grade;
+  renderTimeline();
 });
 
 const dlgEl = document.getElementById('detail');

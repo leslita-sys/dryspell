@@ -39,9 +39,26 @@
     <div class="bets-track" id="betsTrack"></div>
   </section>
 
-  <section class="map-section" id="mapSection" hidden>
-    <h2>The corridor</h2>
-    <div class="map-wrap" id="mapWrap"></div>
+  <section class="map-section" id="overviewSection" hidden>
+    <div class="duo">
+      <div class="duo-col duo-map">
+        <h2>The corridor</h2>
+        <p class="section-sub">Zones south to north. Click to jump.</p>
+        <div class="map-wrap" id="mapWrap"></div>
+      </div>
+      <div class="duo-col">
+        <h2>Dry timeline</h2>
+        <p class="section-sub">Every area by when it goes dry and how wet it is now. Click a dot to open the area.</p>
+        <div class="grade-filter" id="gradeFilter" role="group" aria-label="Filter areas by grade">
+          <button type="button" data-grade="all" class="active">All grades</button>
+          <button type="button" data-grade="V0-2">V0&ndash;2</button>
+          <button type="button" data-grade="V3-6">V3&ndash;6</button>
+          <button type="button" data-grade="V7-9">V7&ndash;9</button>
+          <button type="button" data-grade="V10+">V10+</button>
+        </div>
+        <div class="map-wrap" id="timelineWrap"></div>
+      </div>
+    </div>
   </section>
 
   <main id="chapters" aria-live="polite"></main>
