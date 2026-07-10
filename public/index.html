@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>DRYSPELL — Squamish Dryness</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="masthead">
+    <svg class="contours" aria-hidden="true" viewBox="0 0 900 260" preserveAspectRatio="xMidYMid slice">
+      <g fill="none" stroke="currentColor" stroke-width="1">
+        <path d="M-20,220 C120,160 200,240 340,190 S560,90 700,150 S880,230 940,180"/>
+        <path d="M-20,190 C110,130 210,210 350,160 S570,60 710,120 S880,200 940,150"/>
+        <path d="M-20,160 C100,100 220,180 360,130 S580,30 720,90 S880,170 940,120"/>
+        <path d="M-20,130 C90,70 230,150 370,100 S590,0 730,60 S880,140 940,90"/>
+        <path d="M-20,100 C80,40 240,120 380,70 S600,-30 740,30 S880,110 940,60"/>
+      </g>
+    </svg>
+    <div class="masthead-inner">
+      <h1>DRYSPELL</h1>
+      <p class="tagline">Squamish granite, hour by hour</p>
+      <div class="meta" id="meta">Reading the sky&hellip;</div>
+    </div>
+  </header>
+
+  <section class="best-bets" id="bestBets" hidden>
+    <h2>Best bets</h2>
+    <div class="bets-track" id="betsTrack"></div>
+  </section>
+
+  <main id="chapters" aria-live="polite"></main>
+
+  <div class="fail" id="fail" hidden>
+    <p>Couldn't reach the weather engine.</p>
+    <button id="retry" type="button">Try again</button>
+  </div>
+
+  <footer class="colophon">
+    <p>Wetness model: guidebook sun aspect + canopy + HRDPS 2.5&nbsp;km grid cells. Forecasts are forecasts — the rock has the final say.</p>
+  </footer>
+
+  <dialog id="detail"></dialog>
+  <script src="/app.js"></script>
+</body>
+</html>
