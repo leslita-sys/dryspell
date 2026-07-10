@@ -1,5 +1,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const os = require('node:os');
+const path = require('node:path');
+// Isolate the disk cache — tests must never touch data/cache/last-good.json
+process.env.DRYSPELL_CACHE_DIR = path.join(os.tmpdir(), `dryspell-test-${process.pid}`);
 const { getWeather, _reset } = require('../lib/weather');
 
 function fakeResponse(nCells) {

@@ -19,9 +19,9 @@ lsof -tiTCP:4328 -sTCP:LISTEN | xargs kill
 
 ## How it works
 
-- **Weather:** one batched [Open-Meteo](https://open-meteo.com/) call per 15 minutes covering 18 forecast grid cells (HRDPS 2.5 km, Canada's high-res model) — past 7 days + next 7 days, hourly. ECMWF precip rides along in the same call for the confidence badge.
+- **Weather:** one batched [Open-Meteo](https://open-meteo.com/) call per 15 minutes covering 18 forecast grid cells — past 7 days + next 7 days, hourly. Model is `gem_seamless`, Canada's GEM blend: HRDPS 2.5 km resolution for roughly the first 48h, regional/global GEM beyond. ECMWF precip rides along in the same call for the confidence badge.
 - **Wetness bucket:** each area replays a per-hour wetness state (mm): rain fills it (scaled by canopy), drying energy drains it (solar radiation gated by when sun actually hits that aspect, wind, vapor pressure deficit). Bucket empty = dry; first empty hour in the forecast = the "Dry Sat ~1 PM" verdict.
-- **Guidebook data** (`data/squamish_areas.json`): sun-aspect icons, dries-fast / climbable-in-rain flags, hike times, GPS, and drying prose for all 73 areas, extracted from the Squamish Bouldering guide V4 by `tools/parse_areas.py`. Derived from a licensed book — personal/crew use only; don't republish the dataset.
+- **Guidebook data** (`data/squamish_areas.json`): sun-aspect icons, dries-fast / climbable-in-rain flags, hike times, and GPS for all 73 areas (plus drying prose for the 24 areas where the book has it), extracted from the Squamish Bouldering guide V4 by `tools/parse_areas.py`. Derived from a licensed book — personal/crew use only; don't republish the dataset.
 - **Coefficients** live in one `MODEL` block in `lib/model.js`, documented and tunable. They're physics-informed first guesses; v2 calibrates them against real "was it dry?" feedback.
 - **Seepage:** areas whose guidebook notes mention seepage get a lingering warning after >1 inch of 3-day rain, independent of surface drying.
 

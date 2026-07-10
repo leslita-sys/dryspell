@@ -11,9 +11,9 @@ const SUN_LABEL = {
 };
 
 const CONF_NOTE = {
-  HIGH: 'Canadian HRDPS and European ECMWF models agree on the week ahead.',
+  HIGH: 'Canadian GEM and European ECMWF models agree on the week ahead.',
   MEDIUM: 'Forecast models mostly agree; timing of rain may shift.',
-  LOW: 'HRDPS and ECMWF disagree on incoming rain — trust the next 24h, doubt the rest.',
+  LOW: 'GEM and ECMWF disagree on incoming rain — trust the next 24h, doubt the rest.',
 };
 
 let DATA = null;
@@ -56,7 +56,8 @@ function sparkSvg(a, { w = 600, h = 120, big = false } = {}) {
   if (!n) return '';
   const maxW = Math.max(2, ...s);           // mm scale, floor keeps flat lines low
   const rain = dailyRainBars(a, w, h);
-  const x = i => (i / (n - 1)) * w;
+  const denom = Math.max(1, n - 1);
+  const x = i => (i / denom) * w;
   const y = v => h - 4 - (v / maxW) * (h - 18);
   const nowX = x(a.nowIndex);
 
@@ -90,7 +91,7 @@ function dailyRainBars(a, w, h) {
     const mm = rainAt(a, i);
     if (mm <= 0.05) continue;
     const bh = Math.min(1, mm / maxRainMm) * (h * 0.42);
-    const x = (i / (n - 1)) * w;
+    const x = (i / Math.max(1, n - 1)) * w;
     p.push(`<rect x="${(x - 1).toFixed(1)}" y="${(h - 4 - bh).toFixed(1)}" width="2" height="${bh.toFixed(1)}" fill="var(--rain)" opacity="0.55"/>`);
   }
   return p.join('');
@@ -129,11 +130,12 @@ function cardHtml(a, idx) {
 
 function render() {
   const meta = document.getElementById('meta');
-  const t = new Date(DATA.generatedAt).toLocaleString('en-US',
+  const t = new Date(DATA.dataAt).toLocaleString('en-US',
     { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Vancouver' });
   const all = DATA.chapters.flatMap(c => c.areas);
   const dryCount = all.filter(a => a.verdict.status === 'dry').length;
-  meta.textContent = `${dryCount} of ${all.length} areas dry · updated ${t} Squamish time`;
+  meta.textContent = `${dryCount} of ${all.length} areas dry · weather from ${t} Squamish time` +
+    (DATA.dataStale ? ' · FEED DOWN — showing last good data' : '');
 
   const bets = document.getElementById('bestBets');
   const track = document.getElementById('betsTrack');
@@ -144,7 +146,7 @@ function render() {
   bets.hidden = false;
 
   document.getElementById('chapters').innerHTML = DATA.chapters.map(c => `
-    <section class="chapter">
+    <section class="chapter" id="ch-${slug(c.name)}">
       <div class="chapter-head">
         <h2>${c.name}</h2>
         <span class="count">${c.areas.length} areas</span>
@@ -152,8 +154,78 @@ function render() {
       <div class="grid">${c.areas.map(cardHtml).join('')}</div>
     </section>`).join('');
 
+  renderMap();
+
   document.querySelectorAll('[data-area]').forEach(el =>
     el.addEventListener('click', () => openDetail(decodeURIComponent(el.dataset.area))));
+}
+
+/* ---------- corridor map (SVG, no tiles, no dependencies) ---------- */
+
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+function renderMap() {
+  const W = 360, H = 620, PAD = 46;
+  const chapters = DATA.chapters.map(c => {
+    const lats = c.areas.map(a => a.lat), lons = c.areas.map(a => a.lon);
+    const dry = c.areas.filter(a => a.verdict.status === 'dry').length;
+    return {
+      name: c.name,
+      lat: lats.reduce((s, v) => s + v, 0) / lats.length,
+      lon: lons.reduce((s, v) => s + v, 0) / lons.length,
+      problems: c.areas.reduce((s, a) => s + a.problems, 0),
+      dryShare: dry / c.areas.length,
+    };
+  });
+  const lats = chapters.map(c => c.lat), lons = chapters.map(c => c.lon);
+  const minLat = Math.min(...lats) - 0.012, maxLat = Math.max(...lats) + 0.012;
+  const minLon = Math.min(...lons) - 0.015, maxLon = Math.max(...lons) + 0.015;
+  const x = lon => PAD + ((lon - minLon) / (maxLon - minLon)) * (W - 2 * PAD);
+  const y = lat => PAD + ((maxLat - lat) / (maxLat - minLat)) * (H - 2 * PAD);
+
+  // Highway 99 spine: chapters south to north (payload is already in that order)
+  const spine = chapters.map(c => `${x(c.lon).toFixed(1)},${y(c.lat).toFixed(1)}`).join(' L');
+
+  // label placement with de-collision: same-side labels get pushed apart vertically
+  const placed = chapters.map(c => {
+    const cx = x(c.lon), cy = y(c.lat);
+    return { ...c, cx, cy, left: cx > W * 0.55, ly: cy + 4 };
+  });
+  for (const side of [true, false]) {
+    const lane = placed.filter(p => p.left === side).sort((a, b) => a.ly - b.ly);
+    for (let i = 1; i < lane.length; i++) {
+      if (lane[i].ly - lane[i - 1].ly < 15) lane[i].ly = lane[i - 1].ly + 15;
+    }
+  }
+
+  const dots = placed.map(c => {
+    const r = Math.max(9, Math.min(20, 6 + Math.sqrt(c.problems) / 2.4));
+    const color = c.dryShare === 1 ? 'var(--dry)' : c.dryShare >= 0.5 ? 'var(--drying)' : 'var(--wet-ink)';
+    return `
+    <g class="map-dot" data-chapter="${slug(c.name)}" tabindex="0" role="button" aria-label="${c.name}">
+      <circle cx="${c.cx.toFixed(1)}" cy="${c.cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${color}" opacity="0.16"/>
+      <circle cx="${c.cx.toFixed(1)}" cy="${c.cy.toFixed(1)}" r="4.5" fill="${color}"/>
+      <text x="${(c.left ? c.cx - r - 6 : c.cx + r + 6).toFixed(1)}" y="${c.ly.toFixed(1)}"
+            text-anchor="${c.left ? 'end' : 'start'}">${c.name}</text>
+    </g>`;
+  }).join('');
+
+  document.getElementById('mapWrap').innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" class="corridor" role="img" aria-label="Map of Squamish bouldering zones, colored by dryness">
+    <path d="M${x(minLon + 0.004)},${H} L${x(minLon + 0.01)},${y(49.665).toFixed(0)} L${x(minLon)},${y(49.69).toFixed(0)} L0,${y(49.70).toFixed(0)} L0,${H} Z"
+          fill="var(--rain)" opacity="0.07"/>
+    <text x="10" y="${H - 14}" class="water-label">Howe Sound</text>
+    <path d="M${spine}" fill="none" stroke="var(--grid)" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round"/>
+    ${dots}
+    <text x="${W - 10}" y="22" text-anchor="end" class="compass">N &uarr;</text>
+  </svg>`;
+  document.getElementById('mapSection').hidden = false;
+
+  document.querySelectorAll('.map-dot').forEach(el => {
+    const go = () => document.getElementById(`ch-${el.dataset.chapter}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
 }
 
 /* ---------- detail dialog ---------- */
@@ -197,9 +269,11 @@ function openDetail(name) {
       </table>
     </div>`;
   dlg.querySelector('.close').addEventListener('click', () => dlg.close());
-  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
   dlg.showModal();
 }
 
+const dlgEl = document.getElementById('detail');
+dlgEl.addEventListener('click', e => { if (e.target === dlgEl) dlgEl.close(); });
 document.getElementById('retry').addEventListener('click', load);
+document.getElementById('refresh').addEventListener('click', load);
 load();

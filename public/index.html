@@ -24,13 +24,21 @@
     <div class="masthead-inner">
       <h1>DRYSPELL</h1>
       <p class="tagline">Squamish granite, hour by hour</p>
-      <div class="meta" id="meta">Reading the sky&hellip;</div>
+      <div class="meta-row">
+        <div class="meta" id="meta">Reading the sky&hellip;</div>
+        <button id="refresh" type="button" title="Weather re-fetches at most every 15 minutes">Refresh</button>
+      </div>
     </div>
   </header>
 
   <section class="best-bets" id="bestBets" hidden>
     <h2>Best bets</h2>
     <div class="bets-track" id="betsTrack"></div>
+  </section>
+
+  <section class="map-section" id="mapSection" hidden>
+    <h2>The corridor</h2>
+    <div class="map-wrap" id="mapWrap"></div>
   </section>
 
   <main id="chapters" aria-live="polite"></main>
@@ -41,7 +49,14 @@
   </div>
 
   <footer class="colophon">
-    <p>Wetness model: guidebook sun aspect + canopy + HRDPS 2.5&nbsp;km grid cells. Forecasts are forecasts — the rock has the final say.</p>
+    <h2>Data sources</h2>
+    <ul id="sources">
+      <li><strong>Forecast + past week:</strong> Open-Meteo, Canadian GEM model blend (HRDPS 2.5&nbsp;km resolution near-term, regional GEM beyond ~48h). Hourly rain, temp, humidity, wind, and solar radiation per grid cell, refreshed at most every 15 minutes.</li>
+      <li><strong>Model cross-check:</strong> European ECMWF precipitation from the same call. Drives the confidence badge.</li>
+      <li><strong>Area knowledge:</strong> Squamish Bouldering guide V4: sun aspect, canopy, dries-fast flags, hike times, and GPS for all 73 areas, plus drying notes where the book has them.</li>
+      <li><strong>Wetness + dry-time verdicts:</strong> computed here by the DRYSPELL bucket model, not a published feed. Coefficients are v1 estimates.</li>
+    </ul>
+    <p>Forecasts are forecasts. The rock has the final say.</p>
   </footer>
 
   <dialog id="detail"></dialog>
