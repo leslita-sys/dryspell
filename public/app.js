@@ -291,6 +291,8 @@ function jumpToArea(areaName) {
 /* ---------- dry timeline: tabbed scatter (area / boulder / climb) ---------- */
 
 const BANDS = ['V0-2', 'V3-6', 'V7-9', 'V10+'];
+// the guidebook's own grade colors: green / blue / black / red
+const BAND_COLOR = { 'V0-2': '#0ca30c', 'V3-6': '#2a78d6', 'V7-9': '#000000', 'V10+': '#d03b3b' };
 
 function bandCount(a, bandKey) {
   if (bandKey === 'all') return a.problems;
@@ -308,7 +310,7 @@ function renderTimeline() {
   const xOf = hrs => hrs === null ? plotR + laneW / 2 : P.l + (hrs / MAXH) * (plotR - P.l);
 
   // build tab-specific dot descriptors: { hrs, yv, r, color, name, title, go }
-  let items = [], yMode = 'wet';
+  let items = [];
   if (TLTAB === 'area') {
     items = DATA.chapters.map(c => {
       const finite = c.areas.map(dryHours).filter(Number.isFinite);
@@ -324,37 +326,35 @@ function renderTimeline() {
       };
     });
   } else if (TLTAB === 'boulder') {
-    items = allAreas.filter(a => bandCount(a, GRADE) > 0).map(a => ({
+    items = allAreas.map(a => ({
       hrs: hrsOf(a),
       yv: a.currentIn,
       r: 6, color: STATUS_COLOR[a.verdict.status],
       title: `${a.name} · ${a.verdict.label}` +
-        (GRADE === 'all' ? '' : ` · ${bandCount(a, GRADE)} in ${GRADE}`) +
         (a.currentIn > 0 ? ` · ${a.currentIn}″ on rock` : ''),
       go: () => openDetail(a.name),
     }));
-  } else { // climb: y = grade band rows, dot per area-with-problems-in-band
+  } else { // climb: same dry-to-wet axis, dots colored by guidebook grade band
     for (const a of allAreas) {
-      BANDS.forEach((b, bi) => {
+      for (const b of BANDS) {
+        if (GRADE !== 'all' && b !== GRADE) continue;
         const n = bandCount(a, b);
-        if (!n) return;
+        if (!n) continue;
         items.push({
           hrs: hrsOf(a),
-          yv: bi,
-          r: Math.min(13, 4 + Math.sqrt(n) * 1.1),
-          color: STATUS_COLOR[a.verdict.status],
-          title: `${a.name} · ~${n} problems ${b} · ${a.verdict.label}`,
+          yv: a.currentIn,
+          r: Math.min(12, 4 + Math.sqrt(n) * 1.0),
+          color: BAND_COLOR[b],
+          title: `${a.name} · ~${n} problems ${b} · ${a.verdict.label}` +
+            (a.currentIn > 0 ? ` · ${a.currentIn}″ on rock` : ''),
           go: () => openDetail(a.name),
         });
-      });
+      }
     }
-    yMode = 'band';
   }
 
-  const wetMax = Math.max(0.05, ...items.map(it => yMode === 'wet' ? it.yv : 0));
-  const yOf = it => yMode === 'band'
-    ? P.t + ((it.yv + 0.5) / BANDS.length) * (H - P.t - P.b)
-    : H - P.b - (it.yv / wetMax) * (H - P.t - P.b);
+  const wetMax = Math.max(0.05, ...items.map(it => it.yv));
+  const yOf = it => H - P.b - (it.yv / wetMax) * (H - P.t - P.b);
 
   // spiral collision relief so piled dots stay individually clickable
   const placed = [];
@@ -384,13 +384,7 @@ function renderTimeline() {
       <text x="${tx}" y="${H - P.b + 34}" text-anchor="middle" class="tick-clock">${k === 0 ? '' : clock}</text>`));
   }
 
-  const yAxis = yMode === 'band'
-    ? BANDS.map((b, bi) => {
-        const by = P.t + ((bi + 0.5) / BANDS.length) * (H - P.t - P.b);
-        return `<text x="14" y="${by + 4}" class="axis-name">${b}</text>
-          <line x1="${P.l - 6}" y1="${by}" x2="${plotR}" y2="${by}" stroke="rgba(0,0,0,0.06)"/>`;
-      }).join('')
-    : `<text x="14" y="${P.t + 4}" class="axis-name">WETTER</text>
+  const yAxis = `<text x="14" y="${P.t + 4}" class="axis-name">WETTER</text>
        <text x="14" y="${H - P.b - 6}" class="axis-name">DRIER</text>`;
 
   // position all dots first, then de-collide the labels vertically (area tab)
@@ -425,10 +419,12 @@ function renderTimeline() {
     ${ticks.join('')}
     <text x="${plotR + laneW / 2}" y="${H - P.b + 20}" text-anchor="middle">NOT TODAY</text>
     ${yAxis}
-    <g class="legend">
-      <circle cx="${plotR - 310}" cy="${P.t - 14}" r="5" fill="var(--dry)"/><text x="${plotR - 300}" y="${P.t - 10}">DRY</text>
-      <circle cx="${plotR - 230}" cy="${P.t - 14}" r="5" fill="var(--drying)"/><text x="${plotR - 220}" y="${P.t - 10}">WILL BE DRY</text>
-      <circle cx="${plotR - 90}" cy="${P.t - 14}" r="5" fill="var(--wet)"/><text x="${plotR - 80}" y="${P.t - 10}">WET</text>
+    <g class="legend">${TLTAB === 'climb'
+      ? BANDS.map((b, i) => `<circle cx="${plotR - 340 + i * 85}" cy="${P.t - 14}" r="5" fill="${BAND_COLOR[b]}"/>
+          <text x="${plotR - 330 + i * 85}" y="${P.t - 10}">${b}</text>`).join('')
+      : `<circle cx="${plotR - 310}" cy="${P.t - 14}" r="5" fill="var(--dry)"/><text x="${plotR - 300}" y="${P.t - 10}">DRY</text>
+         <circle cx="${plotR - 230}" cy="${P.t - 14}" r="5" fill="var(--drying)"/><text x="${plotR - 220}" y="${P.t - 10}">WILL BE DRY</text>
+         <circle cx="${plotR - 90}" cy="${P.t - 14}" r="5" fill="var(--wet)"/><text x="${plotR - 80}" y="${P.t - 10}">WET</text>`}
     </g>
     ${dots}
   </svg>`;
@@ -443,7 +439,7 @@ function renderTimeline() {
 
   document.querySelectorAll('#chartTabs button').forEach(b =>
     b.classList.toggle('active', b.dataset.tab === TLTAB));
-  document.getElementById('gradeFilter').hidden = TLTAB !== 'boulder';
+  document.getElementById('gradeFilter').hidden = TLTAB !== 'climb';
   document.getElementById('gradeFilter').querySelectorAll('button').forEach(b =>
     b.classList.toggle('active', b.dataset.grade === GRADE));
 }
