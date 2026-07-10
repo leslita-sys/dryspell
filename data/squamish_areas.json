@@ -1,6 +1,6 @@
 [
  {
-  "name": "Valley Of Shaddai",
+  "name": "Valley of Shaddai",
   "chapter": "Murrin Park",
   "pdf_page": 73,
   "book_page": 71,
@@ -14,7 +14,7 @@
   "climbable_in_rain": false
  },
  {
-  "name": "Israel'S Cave",
+  "name": "Israel's Cave",
   "chapter": "Murrin Park",
   "pdf_page": 76,
   "book_page": 74,
@@ -165,7 +165,7 @@
   ]
  },
  {
-  "name": "Sea To Sky Gondola",
+  "name": "Sea to Sky Gondola",
   "chapter": "Shannon Falls",
   "pdf_page": 114,
   "book_page": 112,
@@ -401,7 +401,7 @@
   "climbable_in_rain": false
  },
  {
-  "name": "Gilligan'S Island",
+  "name": "Gilligan's Island",
   "chapter": "The Grand Wall",
   "pdf_page": 246,
   "book_page": 244,
@@ -415,7 +415,7 @@
   "climbable_in_rain": false
  },
  {
-  "name": "Ride The Lightning",
+  "name": "Ride the Lightning",
   "chapter": "The Grand Wall",
   "pdf_page": 250,
   "book_page": 248,
@@ -613,7 +613,7 @@
   "climbable_in_rain": false
  },
  {
-  "name": "Angel'S Crest Trail",
+  "name": "Angel's Crest Trail",
   "chapter": "The North Walls",
   "pdf_page": 334,
   "book_page": 332,
@@ -659,7 +659,7 @@
   ]
  },
  {
-  "name": "Close To Home",
+  "name": "Close to Home",
   "chapter": "The North Walls",
   "pdf_page": 368,
   "book_page": 366,

@@ -17,6 +17,8 @@ const CONF_NOTE = {
 };
 
 let DATA = null;
+let VIEW = 'week';      // 'week' = 14-day window, 'today' = now-2h .. +24h
+let PROBLEMS = null;    // lazy-loaded index of all 3,569 problem names
 
 async function load() {
   const fail = document.getElementById('fail');
@@ -50,22 +52,32 @@ function hikeLabel(a) {
 
 /* ---------- sparkline (single wetness series + rain bars) ---------- */
 
+function viewWindow(a) {
+  if (VIEW === 'today') {
+    const s0 = Math.max(0, a.nowIndex - 2);
+    return [s0, Math.min(a.series.length, a.nowIndex + 25)];
+  }
+  return [0, a.series.length];
+}
+
 function sparkSvg(a, { w = 600, h = 120, big = false } = {}) {
-  const s = a.series;
+  const [s0, s1] = viewWindow(a);
+  const s = a.series.slice(s0, s1);
   const n = s.length;
   if (!n) return '';
+  const nowI = a.nowIndex - s0;
   const maxW = Math.max(2, ...s);           // mm scale, floor keeps flat lines low
-  const rain = dailyRainBars(a, w, h);
+  const rain = dailyRainBars(a, w, h, s0, s1);
   const denom = Math.max(1, n - 1);
   const x = i => (i / denom) * w;
   const y = v => h - 4 - (v / maxW) * (h - 18);
-  const nowX = x(a.nowIndex);
+  const nowX = x(nowI);
 
   let past = '', future = '';
   for (let i = 0; i < n; i++) {
     const pt = `${x(i).toFixed(1)},${y(s[i]).toFixed(1)}`;
-    if (i <= a.nowIndex) past += (past ? ' L' : 'M') + pt;
-    if (i >= a.nowIndex) future += (future ? ' L' : 'M') + pt;
+    if (i <= nowI) past += (past ? ' L' : 'M') + pt;
+    if (i >= nowI) future += (future ? ' L' : 'M') + pt;
   }
   const base = y(0).toFixed(1);
   const futureArea = `${future} L${w},${base} L${nowX.toFixed(1)},${base} Z`;
@@ -74,27 +86,36 @@ function sparkSvg(a, { w = 600, h = 120, big = false } = {}) {
   <svg class="${big ? 'big-chart' : 'spark'}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img"
        aria-label="Wetness, past week and forecast">
     ${rain}
-    <line x1="0" y1="${base}" x2="${w}" y2="${base}" stroke="var(--grid)" stroke-width="1"/>
-    <line x1="${nowX.toFixed(1)}" y1="6" x2="${nowX.toFixed(1)}" y2="${base}" stroke="var(--ink-mut)" stroke-width="1" stroke-dasharray="2 3"/>
+    <line x1="0" y1="${base}" x2="${w}" y2="${base}" stroke="rgba(0,0,0,0.25)" stroke-width="1"/>
+    <line x1="${nowX.toFixed(1)}" y1="6" x2="${nowX.toFixed(1)}" y2="${base}" stroke="rgba(0,0,0,0.45)" stroke-width="1" stroke-dasharray="2 3"/>
     <path d="${futureArea}" fill="var(--rain)" opacity="0.10"/>
-    <path d="${past}" fill="none" stroke="var(--rain-soft)" stroke-width="2" opacity="0.38"/>
-    <path d="${future}" fill="none" stroke="var(--rain-soft)" stroke-width="2"/>
+    <path d="${past}" fill="none" stroke="var(--rain)" stroke-width="2" opacity="0.35"/>
+    <path d="${future}" fill="none" stroke="var(--rain)" stroke-width="2"/>
   </svg>`;
 }
 
-function dailyRainBars(a, w, h) {
+function dailyRainBars(a, w, h, s0 = 0, s1 = a.series.length) {
   // hourly precip drawn as slim bottom bars, 24h buckets are too coarse for timing
   const p = [];
-  const n = a.series.length;
+  const n = s1 - s0;
   const maxRainMm = 5; // full-height bar at 5mm/h — heavy rain
+  const bw = VIEW === 'today' ? 6 : 2;
   for (let i = 0; i < n; i++) {
-    const mm = rainAt(a, i);
+    const mm = rainAt(a, i + s0);
     if (mm <= 0.05) continue;
     const bh = Math.min(1, mm / maxRainMm) * (h * 0.42);
     const x = (i / Math.max(1, n - 1)) * w;
-    p.push(`<rect x="${(x - 1).toFixed(1)}" y="${(h - 4 - bh).toFixed(1)}" width="2" height="${bh.toFixed(1)}" fill="var(--rain)" opacity="0.55"/>`);
+    p.push(`<rect x="${(x - bw / 2).toFixed(1)}" y="${(h - 4 - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="var(--rain)" opacity="0.55"/>`);
   }
   return p.join('');
+}
+
+function sparkCaps(a) {
+  const wetIn = a.seriesInches[a.nowIndex];
+  const mid = wetIn > 0 ? `${wetIn}&Prime; on the rock` : '';
+  return VIEW === 'today'
+    ? `<span>now</span><span>${mid}</span><span>+24 h</span>`
+    : `<span>7 days back</span><span>${mid}</span><span>7 days out</span>`;
 }
 
 function rainAt(a, i) {
@@ -116,15 +137,17 @@ function cardHtml(a, idx) {
     .filter(Boolean).map(f => `<span>${f}</span>`).join('');
   const wetIn = a.seriesInches[a.nowIndex];
   return `
-  <button class="card" data-area="${encodeURIComponent(a.name)}" type="button">
-    <div class="card-top">
+  <button class="card" id="area-${slug(a.name)}" data-area="${encodeURIComponent(a.name)}" type="button">
+    <div class="card-text">
       <h3>${a.name}</h3>
-      <span class="pill ${a.verdict.status}">${a.verdict.label}</span>
+      <div class="facts">${facts}</div>
+      <div class="chips">${chipHtml(a)}</div>
     </div>
-    <div class="facts">${facts}</div>
-    <div class="chips">${chipHtml(a)}</div>
-    ${sparkSvg(a)}
-    <div class="spark-cap"><span>7 days back</span><span>${wetIn > 0 ? wetIn + '″ on the rock' : ''}</span><span>7 days out</span></div>
+    <div class="card-viz">
+      <span class="pill ${a.verdict.status}">${a.verdict.label}</span>
+      ${sparkSvg(a)}
+      <div class="spark-cap">${sparkCaps(a)}</div>
+    </div>
   </button>`;
 }
 
@@ -135,7 +158,8 @@ function render() {
   const all = DATA.chapters.flatMap(c => c.areas);
   const dryCount = all.filter(a => a.verdict.status === 'dry').length;
   meta.textContent = `${dryCount} of ${all.length} areas dry · weather from ${t} Squamish time` +
-    (DATA.dataStale ? ' · FEED DOWN — showing last good data' : '');
+    (DATA.dataStale ? ' · FEED DOWN, SHOWING LAST GOOD DATA' : '');
+  document.getElementById('tldr').textContent = DATA.tldr;
 
   const bets = document.getElementById('bestBets');
   const track = document.getElementById('betsTrack');
@@ -145,19 +169,46 @@ function render() {
      </button>`).join('');
   bets.hidden = false;
 
+  document.getElementById('navLinks').innerHTML = DATA.chapters.map(c =>
+    `<a href="#ch-${slug(c.name)}" data-nav="${slug(c.name)}">${c.name}</a>`).join('');
+  document.getElementById('quicknav').hidden = false;
+  document.getElementById('viewToggle').textContent = VIEW === 'week' ? 'View: Week' : 'View: Today';
+
   document.getElementById('chapters').innerHTML = DATA.chapters.map(c => `
-    <section class="chapter" id="ch-${slug(c.name)}">
-      <div class="chapter-head">
+    <details class="chapter" id="ch-${slug(c.name)}" open>
+      <summary class="chapter-head">
         <h2>${c.name}</h2>
         <span class="count">${c.areas.length} areas</span>
-      </div>
+      </summary>
       <div class="grid">${c.areas.map(cardHtml).join('')}</div>
-    </section>`).join('');
+    </details>`).join('');
 
   renderMap();
 
   document.querySelectorAll('[data-area]').forEach(el =>
     el.addEventListener('click', () => openDetail(decodeURIComponent(el.dataset.area))));
+  document.querySelectorAll('[data-nav]').forEach(el =>
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      jumpToChapter(el.dataset.nav);
+    }));
+}
+
+function jumpToChapter(chSlug) {
+  const sec = document.getElementById(`ch-${chSlug}`);
+  if (!sec) return;
+  sec.open = true;
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function jumpToArea(areaName) {
+  const row = document.getElementById(`area-${slug(areaName)}`);
+  if (!row) return;
+  const sec = row.closest('details');
+  if (sec) sec.open = true;
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.add('flash');
+  setTimeout(() => row.classList.remove('flash'), 2000);
 }
 
 /* ---------- corridor map (SVG, no tiles, no dependencies) ---------- */
@@ -200,7 +251,7 @@ function renderMap() {
 
   const dots = placed.map(c => {
     const r = Math.max(9, Math.min(20, 6 + Math.sqrt(c.problems) / 2.4));
-    const color = c.dryShare === 1 ? 'var(--dry)' : c.dryShare >= 0.5 ? 'var(--drying)' : 'var(--wet-ink)';
+    const color = c.dryShare === 1 ? 'var(--dry)' : c.dryShare >= 0.5 ? 'var(--drying)' : 'var(--wet)';
     return `
     <g class="map-dot" data-chapter="${slug(c.name)}" tabindex="0" role="button" aria-label="${c.name}">
       <circle cx="${c.cx.toFixed(1)}" cy="${c.cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${color}" opacity="0.16"/>
@@ -213,9 +264,9 @@ function renderMap() {
   document.getElementById('mapWrap').innerHTML = `
   <svg viewBox="0 0 ${W} ${H}" class="corridor" role="img" aria-label="Map of Squamish bouldering zones, colored by dryness">
     <path d="M${x(minLon + 0.004)},${H} L${x(minLon + 0.01)},${y(49.665).toFixed(0)} L${x(minLon)},${y(49.69).toFixed(0)} L0,${y(49.70).toFixed(0)} L0,${H} Z"
-          fill="var(--rain)" opacity="0.07"/>
+          fill="var(--rain)" opacity="0.12"/>
     <text x="10" y="${H - 14}" class="water-label">Howe Sound</text>
-    <path d="M${spine}" fill="none" stroke="var(--grid)" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round"/>
+    <path d="M${spine}" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round"/>
     ${dots}
     <text x="${W - 10}" y="22" text-anchor="end" class="compass">N &uarr;</text>
   </svg>`;
@@ -261,7 +312,9 @@ function openDetail(name) {
       </div>
       <p class="conf-note">${CONF_NOTE[a.confidence]}</p>
       ${sparkSvg(a, { w: 640, h: 190, big: true })}
-      <div class="axis-cap"><span>7 days ago</span><span>now</span><span>+7 days</span></div>
+      <div class="axis-cap">${VIEW === 'today'
+        ? '<span>2 h ago</span><span>now</span><span>+24 h</span>'
+        : '<span>7 days ago</span><span>now</span><span>+7 days</span>'}</div>
       ${seep}${notes}
       <table class="rain-table">
         <thead><tr><th>Day</th><th>Rain (in)</th><th>(mm)</th></tr></thead>
@@ -271,6 +324,63 @@ function openDetail(name) {
   dlg.querySelector('.close').addEventListener('click', () => dlg.close());
   dlg.showModal();
 }
+
+/* ---------- search: areas + all 3,569 problem names ---------- */
+
+async function ensureProblems() {
+  if (PROBLEMS) return PROBLEMS;
+  const res = await fetch('/api/problems');
+  PROBLEMS = res.ok ? await res.json() : [];
+  return PROBLEMS;
+}
+
+function runSearch(q) {
+  const box = document.getElementById('searchResults');
+  q = q.trim().toLowerCase();
+  if (q.length < 2 || !DATA) { box.hidden = true; box.innerHTML = ''; return; }
+  const areas = DATA.chapters.flatMap(c => c.areas)
+    .filter(a => a.name.toLowerCase().includes(q))
+    .slice(0, 6)
+    .map(a => ({ kind: 'AREA', label: a.name, sub: a.chapter, area: a.name }));
+  const probs = (PROBLEMS || [])
+    .filter(p => p.n.toLowerCase().includes(q))
+    .slice(0, 8)
+    .map(p => ({ kind: 'PROBLEM', label: p.n, sub: `${p.a} · ${p.c}`, area: p.a }));
+  const results = [...areas, ...probs].slice(0, 12);
+  if (!results.length) {
+    box.innerHTML = '<div class="search-empty">No matches</div>';
+    box.hidden = false;
+    return;
+  }
+  box.innerHTML = results.map(r =>
+    `<button type="button" class="search-hit" data-hit="${encodeURIComponent(r.area)}">
+       <span class="hit-kind">${r.kind}</span><span class="hit-label">${r.label}</span><span class="hit-sub">${r.sub}</span>
+     </button>`).join('');
+  box.hidden = false;
+  box.querySelectorAll('.search-hit').forEach(el =>
+    el.addEventListener('click', () => {
+      box.hidden = true;
+      document.getElementById('search').value = '';
+      jumpToArea(decodeURIComponent(el.dataset.hit));
+    }));
+}
+
+const searchEl = document.getElementById('search');
+let searchTimer = null;
+searchEl.addEventListener('input', () => {
+  ensureProblems();
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => runSearch(searchEl.value), 120);
+});
+searchEl.addEventListener('focus', () => ensureProblems());
+document.addEventListener('click', e => {
+  if (!e.target.closest('.searchbox')) document.getElementById('searchResults').hidden = true;
+});
+
+document.getElementById('viewToggle').addEventListener('click', () => {
+  VIEW = VIEW === 'week' ? 'today' : 'week';
+  render();
+});
 
 const dlgEl = document.getElementById('detail');
 dlgEl.addEventListener('click', e => { if (e.target === dlgEl) dlgEl.close(); });

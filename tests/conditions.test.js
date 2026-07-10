@@ -7,7 +7,7 @@ process.env.DRYSPELL_CACHE_DIR = path.join(os.tmpdir(), `dryspell-test-cond-${pr
 const { buildConditions, verdictLabel } = require('../lib/conditions');
 const { _reset } = require('../lib/weather');
 
-function fakeFetch(rainy) {
+function fakeFetch(rainy, { ecmwfOnlyRain = false } = {}) {
   return async () => ({
     ok: true,
     json: async () => {
@@ -18,7 +18,7 @@ function fakeFetch(rainy) {
         new Date(start.getTime() + i * 3600e3).toISOString().slice(0, 16));
       const hourly = {
         time,
-        precipitation_gem_seamless: time.map((_, i) => (rainy && i < 160 ? 1.5 : 0)),
+        precipitation_gem_seamless: time.map((_, i) => (rainy && !ecmwfOnlyRain && i < 160 ? 1.5 : 0)),
         temperature_2m_gem_seamless: Array(n).fill(18),
         relative_humidity_2m_gem_seamless: Array(n).fill(55),
         wind_speed_10m_gem_seamless: Array(n).fill(10),
@@ -56,4 +56,13 @@ test('recent rain yields wet/drying with dry-time labels', async () => {
 
 test('verdictLabel formats Vancouver-local weekday and hour', () => {
   assert.match(verdictLabel('2026-07-18T13:00'), /^Dry (today|Sat) ~1 PM$/);
+});
+
+test('ECMWF-only past rain still wets the bucket (conservative blend)', async () => {
+  _reset();
+  const p = await buildConditions({ fetchImpl: fakeFetch(true, { ecmwfOnlyRain: true }) });
+  const all = p.chapters.flatMap(c => c.areas);
+  assert.ok(all.some(a => a.verdict.status !== 'dry'),
+    'GEM said dry but ECMWF said rain; verdicts must not all read dry');
+  assert.ok(typeof p.tldr === 'string' && p.tldr.length > 20, 'tldr present');
 });
