@@ -38,3 +38,14 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => console.log(`DRYSPELL on http://${HOST}:${PORT}`));
+
+// warm the weather cache at boot; keep trying if the API is rate-limiting us
+(async function warm() {
+  try {
+    await buildConditions({});
+    console.log('weather cache warmed');
+  } catch (err) {
+    console.error(`warm fetch failed (${err.message}), retrying in 60s`);
+    setTimeout(warm, 60e3);
+  }
+})();

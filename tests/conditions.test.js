@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 // Isolate the disk cache — tests must never touch data/cache/last-good.json
 process.env.DRYSPELL_CACHE_DIR = path.join(os.tmpdir(), `dryspell-test-cond-${process.pid}`);
+process.env.DRYSPELL_RETRY_BASE_MS = '1'; // keep retry backoff instant in tests
 const { buildConditions, verdictLabel } = require('../lib/conditions');
 const { _reset } = require('../lib/weather');
 
