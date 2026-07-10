@@ -2,5 +2,5 @@
   "name": "dryspell",
   "private": true,
   "version": "0.1.0",
-  "scripts": { "start": "node server.js", "test": "node --test tests/" }
+  "scripts": { "start": "node server.js", "test": "node --test tests/*.test.js" }
 }
