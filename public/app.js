@@ -163,9 +163,9 @@ function render() {
 
   const bets = document.getElementById('bestBets');
   const track = document.getElementById('betsTrack');
-  track.innerHTML = DATA.bestBets.today.map((name, i) =>
-    `<button class="bet" data-area="${encodeURIComponent(name)}" type="button">
-       <span class="rank">${i + 1}</span><span class="bname">${name}</span>
+  track.innerHTML = DATA.bestBets.today.map((b, i) =>
+    `<button class="bet" data-area="${encodeURIComponent(b.name)}" type="button">
+       <span class="rank">${i + 1}</span><span class="bname">${b.name}</span><span class="bwhen">${b.label}</span>
      </button>`).join('');
   bets.hidden = false;
 
