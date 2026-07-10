@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: dryspell
+    runtime: node
+    plan: free
+    repo: https://github.com/leslita-sys/dryspell
+    branch: main
+    startCommand: node server.js
+    healthCheckPath: /

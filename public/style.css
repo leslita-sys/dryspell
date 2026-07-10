@@ -163,7 +163,7 @@ body {
   color: var(--ink);
 }
 
-#refresh, .close, .fail button {
+.close, .fail button {
   font-family: var(--sans);
   font-size: 16px;
   background: var(--ink);
@@ -174,7 +174,9 @@ body {
   cursor: pointer;
 }
 
-#refresh:hover, .close:hover, .fail button:hover { opacity: 0.75; }
+.close:hover, .fail button:hover { opacity: 0.75; }
+
+.pull-note { color: rgba(26, 26, 26, 0.55); }
 
 /* ---------- quicknav: sticky search + chapter links + view toggle ---------- */
 

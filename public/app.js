@@ -636,5 +636,6 @@ document.getElementById('gradeFilter').addEventListener('click', e => {
 const dlgEl = document.getElementById('detail');
 dlgEl.addEventListener('click', e => { if (e.target === dlgEl) dlgEl.close(); });
 document.getElementById('retry').addEventListener('click', load);
-document.getElementById('refresh').addEventListener('click', load);
+// server weather cache TTL is 15 min (lib/weather.js) — re-pull on the same cadence
+setInterval(load, 15 * 60 * 1000);
 load();
