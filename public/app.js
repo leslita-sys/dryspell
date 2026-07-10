@@ -231,7 +231,9 @@ function render() {
     { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Vancouver' });
   const all = DATA.chapters.flatMap(c => c.areas);
   const dryCount = all.filter(a => a.verdict.status === 'dry').length;
-  meta.textContent = `${dryCount} of ${all.length} areas dry · weather from ${t} Squamish time` +
+  meta.innerHTML =
+    `<span class="dry-count ${dryCount > 0 ? 'pos' : 'zero'}">${dryCount} of ${all.length} areas dry</span>` +
+    ` · weather from ${t} Squamish time · updates every 15 minutes with each weather pull` +
     (DATA.dataStale ? ' · FEED DOWN, SHOWING LAST GOOD DATA' : '');
   document.getElementById('tldr').textContent = DATA.tldr;
 

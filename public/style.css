@@ -176,7 +176,9 @@ body {
 
 .close:hover, .fail button:hover { opacity: 0.75; }
 
-.pull-note { color: rgba(26, 26, 26, 0.55); }
+.dry-count { font-weight: 700; }
+.dry-count.zero { color: var(--wet); }
+.dry-count.pos { color: var(--dry); }
 
 /* ---------- quicknav: sticky search + chapter links + view toggle ---------- */
 
