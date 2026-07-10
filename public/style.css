@@ -264,22 +264,6 @@ body {
 
 .nav-links a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-#viewToggle {
-  flex: 0 0 auto;
-  font-family: var(--mono);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  background: var(--ink);
-  color: var(--paper);
-  border: none;
-  border-radius: 0;
-  padding: 8px 16px;
-  cursor: pointer;
-}
-
-#viewToggle:hover { opacity: 0.75; }
-
 /* ---------- section headings ---------- */
 
 .best-bets h2, .map-section h2, .chapter h2 {
@@ -393,6 +377,8 @@ body {
   flex-wrap: wrap;
 }
 
+.grade-filter[hidden] { display: none; }
+
 .grade-filter button {
   font-family: var(--mono);
   font-size: 12px;
@@ -408,6 +394,26 @@ body {
 
 .grade-filter button:hover { background: var(--paper-warm); }
 .grade-filter button.active { background: var(--ink); color: var(--paper); }
+
+.chart-tabs { margin-top: 16px; }
+.chart-tabs + .grade-filter { margin-top: 10px; }
+
+.dlg-tabs { display: flex; gap: 8px; margin: 18px 0 0; }
+
+.dlg-tabs button {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--hairline);
+  border-radius: 0;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.dlg-tabs button.active { background: var(--ink); color: var(--paper); }
 
 .map-dot { cursor: pointer; }
 .map-dot:hover text, .map-dot:focus-visible text { text-decoration: underline; }

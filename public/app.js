@@ -17,14 +17,14 @@ const CONF_NOTE = {
 };
 
 let DATA = null;
-let VIEW = 'week';      // 'week' = 14-day window, 'today' = now .. +24h
-let GRADE = 'all';      // timeline filter: 'all' | 'V0-2' | 'V3-6' | 'V7-9' | 'V10+'
-let PROBLEMS = null;    // lazy-loaded index of all 3,569 problem names
+let TLTAB = 'area';     // timeline tab: 'area' | 'boulder' | 'climb'
+let GRADE = 'all';      // boulder-tab filter: 'all' | 'V0-2' | 'V3-6' | 'V7-9' | 'V10+'
+let PROBLEMS = null;    // lazy-loaded index of all problem names
 
 async function load() {
   const fail = document.getElementById('fail');
   fail.hidden = true;
-  document.getElementById('meta').textContent = 'Reading the sky…';
+  document.getElementById('tldr').textContent = 'Reading the sky…';
   try {
     const res = await fetch('/api/conditions');
     if (!res.ok) throw new Error(`api ${res.status}`);
@@ -44,6 +44,7 @@ function fmtTime(iso) {
   });
 }
 
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 const shortChapter = c => c.replace(/^The /, '').replace(' Boulders', '');
 
 function hikeLabel(a) {
@@ -55,22 +56,21 @@ function hikeLabel(a) {
 
 /* ---------- sparkline (single wetness series + rain bars) ---------- */
 
-function viewWindow(a) {
-  if (VIEW === 'today') {
-    // window starts AT now so the left edge and the "now" captions agree
+function viewWindow(a, mode) {
+  if (mode === 'today') {
     return [a.nowIndex, Math.min(a.series.length, a.nowIndex + 25)];
   }
   return [0, a.series.length];
 }
 
-function sparkSvg(a, { w = 600, h = 120, big = false } = {}) {
-  const [s0, s1] = viewWindow(a);
+function sparkSvg(a, { w = 600, h = 120, big = false, mode = 'week' } = {}) {
+  const [s0, s1] = viewWindow(a, mode);
   const s = a.series.slice(s0, s1);
   const n = s.length;
   if (!n) return '';
   const nowI = a.nowIndex - s0;
   const maxW = Math.max(2, ...s);           // mm scale, floor keeps flat lines low
-  const rain = dailyRainBars(a, w, h, s0, s1);
+  const rain = rainBars(a, w, h, s0, s1, mode);
   const denom = Math.max(1, n - 1);
   const x = i => (i / denom) * w;
   const y = v => h - 4 - (v / maxW) * (h - 18);
@@ -97,14 +97,13 @@ function sparkSvg(a, { w = 600, h = 120, big = false } = {}) {
   </svg>`;
 }
 
-function dailyRainBars(a, w, h, s0 = 0, s1 = a.series.length) {
-  // hourly precip drawn as slim bottom bars, 24h buckets are too coarse for timing
+function rainBars(a, w, h, s0, s1, mode) {
   const p = [];
   const n = s1 - s0;
   const maxRainMm = 5; // full-height bar at 5mm/h — heavy rain
-  const bw = VIEW === 'today' ? 6 : 2;
+  const bw = mode === 'today' ? 6 : 2;
   for (let i = 0; i < n; i++) {
-    const mm = rainAt(a, i + s0);
+    const mm = a.precipHourly ? (a.precipHourly[i + s0] ?? 0) : 0;
     if (mm <= 0.05) continue;
     const bh = Math.min(1, mm / maxRainMm) * (h * 0.42);
     const x = (i / Math.max(1, n - 1)) * w;
@@ -113,16 +112,12 @@ function dailyRainBars(a, w, h, s0 = 0, s1 = a.series.length) {
   return p.join('');
 }
 
-function sparkCaps(a) {
+function sparkCaps(a, mode = 'week') {
   const wetIn = a.seriesInches[a.nowIndex];
   const mid = wetIn > 0 ? `${wetIn}&Prime; on the rock` : '';
-  return VIEW === 'today'
+  return mode === 'today'
     ? `<span>now</span><span>${mid}</span><span>+24 h</span>`
     : `<span>7 days back</span><span>${mid}</span><span>7 days out</span>`;
-}
-
-function rainAt(a, i) {
-  return a.precipHourly ? (a.precipHourly[i] ?? 0) : 0;
 }
 
 /* ---------- cards ---------- */
@@ -135,10 +130,9 @@ function chipHtml(a) {
   return chips.join('');
 }
 
-function cardHtml(a, idx) {
+function cardHtml(a) {
   const facts = [SUN_LABEL[a.sun], hikeLabel(a), `${a.problems} problems`]
     .filter(Boolean).map(f => `<span>${f}</span>`).join('');
-  const wetIn = a.seriesInches[a.nowIndex];
   return `
   <button class="card" id="area-${slug(a.name)}" data-area="${encodeURIComponent(a.name)}" type="button">
     <div class="card-text">
@@ -154,80 +148,10 @@ function cardHtml(a, idx) {
   </button>`;
 }
 
-function render() {
-  const meta = document.getElementById('meta');
-  const t = new Date(DATA.dataAt).toLocaleString('en-US',
-    { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Vancouver' });
-  const all = DATA.chapters.flatMap(c => c.areas);
-  const dryCount = all.filter(a => a.verdict.status === 'dry').length;
-  meta.textContent = `${dryCount} of ${all.length} areas dry · weather from ${t} Squamish time` +
-    (DATA.dataStale ? ' · FEED DOWN, SHOWING LAST GOOD DATA' : '');
-  document.getElementById('tldr').textContent = DATA.tldr;
-
-  const bets = document.getElementById('bestBets');
-  const track = document.getElementById('betsTrack');
-  track.innerHTML = DATA.bestBets.today.map((b, i) =>
-    `<button class="bet" data-area="${encodeURIComponent(b.name)}" type="button">
-       <span class="rank">${i + 1}</span><span class="bname">${b.name}</span>
-       <span class="bwhen">${shortChapter(b.chapter)} &middot; ${b.label}</span>
-     </button>`).join('');
-  bets.hidden = false;
-
-  document.getElementById('navLinks').innerHTML = DATA.chapters.map(c =>
-    `<a href="#ch-${slug(c.name)}" data-nav="${slug(c.name)}">${c.name}</a>`).join('');
-  document.getElementById('quicknav').hidden = false;
-  document.getElementById('viewToggle').textContent = VIEW === 'week' ? 'View: Week' : 'View: Today';
-
-  document.getElementById('chapters').innerHTML = DATA.chapters.map(c => `
-    <details class="chapter" id="ch-${slug(c.name)}">
-      <summary class="chapter-head">
-        <h2>${c.name}</h2>
-        <span class="ch-status ${chapterStatus(c)}">${chapterHeadline(c)}</span>
-        <span class="count">${c.areas.length} areas</span>
-      </summary>
-      <div class="grid">${c.areas.map(cardHtml).join('')}</div>
-    </details>`).join('');
-
-  renderCountdown();
-
-  renderTimeline();
-  renderMap();
-
-  document.querySelectorAll('[data-area]').forEach(el =>
-    el.addEventListener('click', () => openDetail(decodeURIComponent(el.dataset.area))));
-  document.querySelectorAll('[data-nav]').forEach(el =>
-    el.addEventListener('click', e => {
-      e.preventDefault();
-      jumpToChapter(el.dataset.nav);
-    }));
-}
-
-function jumpToChapter(chSlug) {
-  const sec = document.getElementById(`ch-${chSlug}`);
-  if (!sec) return;
-  sec.open = true;
-  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function jumpToArea(areaName) {
-  const row = document.getElementById(`area-${slug(areaName)}`);
-  if (!row) return;
-  const sec = row.closest('details');
-  if (sec) sec.open = true;
-  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  row.classList.add('flash');
-  setTimeout(() => row.classList.remove('flash'), 2000);
-}
-
-/* ---------- corridor map (SVG, no tiles, no dependencies) ---------- */
-
-const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
-/* ---------- dry timeline: every area by hours-until-dry vs wetness now ---------- */
+/* ---------- status helpers ---------- */
 
 const STATUS_COLOR = { dry: 'var(--dry)', drying: 'var(--drying)', wet: 'var(--wet)' };
 
-// zone status: green = everything dry, yellow = will be dry (something dries), red = wet
 function chapterStatus(c) {
   if (c.areas.every(a => a.verdict.status === 'dry')) return 'dry';
   if (c.areas.some(a => a.verdict.status !== 'wet')) return 'drying';
@@ -241,20 +165,31 @@ function dryHours(a) {
   return idx >= 0 ? Math.max(0, idx - a.nowIndex) : Infinity;
 }
 
-function clockAtOffset(a, hoursFromNow) {
-  const t = a.times[Math.min(a.times.length - 1, a.nowIndex + Math.round(hoursFromNow))];
-  return new Date(t.slice(0, 10) + 'T' + t.slice(11) + ':00')
-    .toLocaleTimeString('en-US', { hour: 'numeric' });
+// day-aware short label for an offset in hours: "~4 PM" today, "Sat 9 AM" beyond
+function shortWhen(a, offsetHours) {
+  if (offsetHours <= 0) return 'now';
+  const idx = Math.min(a.times.length - 1, a.nowIndex + Math.round(offsetHours));
+  const t = a.times[idx];
+  const d = new Date(t.slice(0, 10) + 'T' + t.slice(11) + ':00');
+  const hour = d.toLocaleTimeString('en-US', { hour: 'numeric' });
+  return t.slice(0, 10) === a.times[a.nowIndex].slice(0, 10)
+    ? `~${hour}`
+    : `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${hour}`;
 }
 
+// header line: honest earliest-to-latest range, never a fake average
 function chapterHeadline(c) {
   const status = chapterStatus(c);
   if (status === 'dry') return 'Dry now';
   if (status === 'wet') return 'Wet';
-  const finite = c.areas.map(dryHours).filter(h => Number.isFinite(h) && h > 0);
+  const hrs = c.areas.map(dryHours);
+  const finite = hrs.filter(Number.isFinite);
   if (!finite.length) return 'Partly dry';
-  const avg = finite.reduce((s, v) => s + v, 0) / finite.length;
-  return `Dry ~${clockAtOffset(c.areas[0], avg)} avg`;
+  const lo = Math.min(...finite), hi = Math.max(...finite);
+  const someNever = hrs.some(h => !Number.isFinite(h));
+  const a = c.areas[0];
+  if (lo === hi && !someNever) return `Dry ${shortWhen(a, lo)}`;
+  return `Dry ${shortWhen(a, lo)}–${someNever ? 'later' : shortWhen(a, hi)}`;
 }
 
 /* ---------- countdown to the first dry area ---------- */
@@ -288,48 +223,157 @@ function renderCountdown() {
   countdownTimer = setInterval(tick, 1000);
 }
 
+/* ---------- render ---------- */
+
+function render() {
+  const meta = document.getElementById('meta');
+  const t = new Date(DATA.dataAt).toLocaleString('en-US',
+    { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Vancouver' });
+  const all = DATA.chapters.flatMap(c => c.areas);
+  const dryCount = all.filter(a => a.verdict.status === 'dry').length;
+  meta.textContent = `${dryCount} of ${all.length} areas dry · weather from ${t} Squamish time` +
+    (DATA.dataStale ? ' · FEED DOWN, SHOWING LAST GOOD DATA' : '');
+  document.getElementById('tldr').textContent = DATA.tldr;
+
+  const bets = document.getElementById('bestBets');
+  const track = document.getElementById('betsTrack');
+  track.innerHTML = DATA.bestBets.today.map((b, i) =>
+    `<button class="bet" data-area="${encodeURIComponent(b.name)}" type="button">
+       <span class="rank">${i + 1}</span><span class="bname">${b.name}</span>
+       <span class="bwhen">${shortChapter(b.chapter)} &middot; ${b.label}</span>
+     </button>`).join('');
+  bets.hidden = false;
+
+  document.getElementById('navLinks').innerHTML = DATA.chapters.map(c =>
+    `<a href="#ch-${slug(c.name)}" data-nav="${slug(c.name)}">${c.name}</a>`).join('');
+  document.getElementById('quicknav').hidden = false;
+
+  document.getElementById('chapters').innerHTML = DATA.chapters.map(c => `
+    <details class="chapter" id="ch-${slug(c.name)}">
+      <summary class="chapter-head">
+        <h2>${c.name}</h2>
+        <span class="ch-status ${chapterStatus(c)}">${chapterHeadline(c)}</span>
+        <span class="count">${c.areas.length} areas</span>
+      </summary>
+      <div class="grid">${c.areas.map(cardHtml).join('')}</div>
+    </details>`).join('');
+
+  renderCountdown();
+  renderTimeline();
+  renderMap();
+
+  document.querySelectorAll('[data-area]').forEach(el =>
+    el.addEventListener('click', () => openDetail(decodeURIComponent(el.dataset.area))));
+  document.querySelectorAll('[data-nav]').forEach(el =>
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      jumpToChapter(el.dataset.nav);
+    }));
+}
+
+function jumpToChapter(chSlug) {
+  const sec = document.getElementById(`ch-${chSlug}`);
+  if (!sec) return;
+  sec.open = true;
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function jumpToArea(areaName) {
+  const row = document.getElementById(`area-${slug(areaName)}`);
+  if (!row) return;
+  const sec = row.closest('details');
+  if (sec) sec.open = true;
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.add('flash');
+  setTimeout(() => row.classList.remove('flash'), 2000);
+}
+
+/* ---------- dry timeline: tabbed scatter (area / boulder / climb) ---------- */
+
+const BANDS = ['V0-2', 'V3-6', 'V7-9', 'V10+'];
+
 function bandCount(a, bandKey) {
   if (bandKey === 'all') return a.problems;
   return a.grade_bands?.[bandKey] ?? 0;
 }
 
 function renderTimeline() {
-  const W = 1000, H = 540, P = { l: 64, r: 40, t: 34, b: 44 };
+  const W = 1000, H = 540, P = { l: 74, r: 40, t: 34, b: 44 };
   const MAXH = 24;
   const laneW = 110;                      // right-hand "not today" lane
   const plotR = W - P.r - laneW;
+  const allAreas = DATA.chapters.flatMap(c => c.areas);
 
-  const all = DATA.chapters.flatMap(c => c.areas)
-    .filter(a => bandCount(a, GRADE) > 0);
+  const hrsOf = a => { const h = dryHours(a); return h <= MAXH ? h : null; };
+  const xOf = hrs => hrs === null ? plotR + laneW / 2 : P.l + (hrs / MAXH) * (plotR - P.l);
 
-  const items = all.map(a => {
-    const hrs = dryHours(a);
-    return { a, hrs: hrs <= MAXH ? hrs : null };       // null -> later lane
-  });
+  // build tab-specific dot descriptors: { hrs, yv, r, color, name, title, go }
+  let items = [], yMode = 'wet';
+  if (TLTAB === 'area') {
+    items = DATA.chapters.map(c => {
+      const finite = c.areas.map(dryHours).filter(Number.isFinite);
+      const lo = finite.length ? Math.min(...finite) : null;
+      const rep = c.areas.reduce((m, a) => a.currentIn < m.currentIn ? a : m);
+      return {
+        hrs: lo !== null && lo <= MAXH ? lo : null,
+        yv: rep.currentIn,
+        r: 8, color: STATUS_COLOR[chapterStatus(c)],
+        label: c.name,
+        title: `${c.name} · ${chapterHeadline(c)}`,
+        go: () => jumpToChapter(slug(c.name)),
+      };
+    });
+  } else if (TLTAB === 'boulder') {
+    items = allAreas.filter(a => bandCount(a, GRADE) > 0).map(a => ({
+      hrs: hrsOf(a),
+      yv: a.currentIn,
+      r: 6, color: STATUS_COLOR[a.verdict.status],
+      title: `${a.name} · ${a.verdict.label}` +
+        (GRADE === 'all' ? '' : ` · ${bandCount(a, GRADE)} in ${GRADE}`) +
+        (a.currentIn > 0 ? ` · ${a.currentIn}″ on rock` : ''),
+      go: () => openDetail(a.name),
+    }));
+  } else { // climb: y = grade band rows, dot per area-with-problems-in-band
+    for (const a of allAreas) {
+      BANDS.forEach((b, bi) => {
+        const n = bandCount(a, b);
+        if (!n) return;
+        items.push({
+          hrs: hrsOf(a),
+          yv: bi,
+          r: Math.min(13, 4 + Math.sqrt(n) * 1.1),
+          color: STATUS_COLOR[a.verdict.status],
+          title: `${a.name} · ~${n} problems ${b} · ${a.verdict.label}`,
+          go: () => openDetail(a.name),
+        });
+      });
+    }
+    yMode = 'band';
+  }
 
-  const wetMax = Math.max(0.05, ...all.map(a => a.currentIn));
-  const x = it => it.hrs === null
-    ? plotR + laneW / 2
-    : P.l + (it.hrs / MAXH) * (plotR - P.l);
-  const y = it => H - P.b - (it.a.currentIn / wetMax) * (H - P.t - P.b);
+  const wetMax = Math.max(0.05, ...items.map(it => yMode === 'wet' ? it.yv : 0));
+  const yOf = it => yMode === 'band'
+    ? P.t + ((it.yv + 0.5) / BANDS.length) * (H - P.t - P.b)
+    : H - P.b - (it.yv / wetMax) * (H - P.t - P.b);
 
   // spiral collision relief so piled dots stay individually clickable
   const placed = [];
   const pos = it => {
-    let px = x(it), py = y(it);
+    let px = xOf(it.hrs), py = yOf(it);
     for (let k = 0; k < 80; k++) {
-      const hit = placed.some(p => (p[0] - px) ** 2 + (p[1] - py) ** 2 < 15 ** 2);
+      const rr = (it.r + 8);
+      const hit = placed.some(p => (p[0] - px) ** 2 + (p[1] - py) ** 2 < rr ** 2);
       if (!hit) break;
       const ang = k * 2.4, rad = 9 + k * 2.1;
-      px = Math.min(W - 12, Math.max(14, x(it) + rad * Math.cos(ang)));
-      py = Math.min(H - P.b - 8, Math.max(P.t + 8, y(it) + rad * Math.sin(ang)));
+      px = Math.min(W - 12, Math.max(14, xOf(it.hrs) + rad * Math.cos(ang)));
+      py = Math.min(H - P.b - 8, Math.max(P.t + 8, yOf(it) + rad * Math.sin(ang)));
     }
     placed.push([px, py]);
     return [px, py];
   };
 
   const ticks = [];
-  const ref = DATA.chapters[0].areas[0];
+  const ref = allAreas[0];
   for (let k = 0; k <= MAXH; k += 6) {
     const tx = P.l + (k / MAXH) * (plotR - P.l);
     const t = ref.times[ref.nowIndex + k];
@@ -340,28 +384,47 @@ function renderTimeline() {
       <text x="${tx}" y="${H - P.b + 34}" text-anchor="middle" class="tick-clock">${k === 0 ? '' : clock}</text>`));
   }
 
-  const dots = items.map(it => {
+  const yAxis = yMode === 'band'
+    ? BANDS.map((b, bi) => {
+        const by = P.t + ((bi + 0.5) / BANDS.length) * (H - P.t - P.b);
+        return `<text x="14" y="${by + 4}" class="axis-name">${b}</text>
+          <line x1="${P.l - 6}" y1="${by}" x2="${plotR}" y2="${by}" stroke="rgba(0,0,0,0.06)"/>`;
+      }).join('')
+    : `<text x="14" y="${P.t + 4}" class="axis-name">WETTER</text>
+       <text x="14" y="${H - P.b - 6}" class="axis-name">DRIER</text>`;
+
+  // position all dots first, then de-collide the labels vertically (area tab)
+  const withPos = items.map(it => {
     const [px, py] = pos(it);
-    const color = STATUS_COLOR[it.a.verdict.status];
-    const n = bandCount(it.a, GRADE);
-    const gradeNote = GRADE === 'all' ? '' : ` · ${n} in ${GRADE}`;
+    return { it, px, py, ly: py + 4 };
+  });
+  const labeled = withPos.filter(p => p.it.label).sort((a, b) => a.ly - b.ly);
+  for (let i = 1; i < labeled.length; i++) {
+    if (labeled[i].ly - labeled[i - 1].ly < 16) labeled[i].ly = labeled[i - 1].ly + 16;
+  }
+
+  const dots = withPos.map(({ it, px, py, ly }, idx) => {
+    const lbl = it.label ? (() => {
+      const left = px > plotR - 120;
+      return `<text x="${(left ? px - it.r - 6 : px + it.r + 6).toFixed(1)}" y="${ly.toFixed(1)}"
+        text-anchor="${left ? 'end' : 'start'}" class="tl-label">${it.label}</text>`;
+    })() : '';
     return `
-    <g class="tl-dot" data-tl="${encodeURIComponent(it.a.name)}" tabindex="0" role="button"
-       aria-label="${it.a.name}: ${it.a.verdict.label}">
-      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="6" fill="${color}" stroke="var(--paper)" stroke-width="2"/>
-      <title>${it.a.name} · ${it.a.verdict.label}${gradeNote}${it.a.currentIn > 0 ? ` · ${it.a.currentIn}″ on rock` : ''}</title>
+    <g class="tl-dot" data-i="${idx}" tabindex="0" role="button" aria-label="${it.title}">
+      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${it.r}" fill="${it.color}" stroke="var(--paper)" stroke-width="2"/>
+      ${lbl}
+      <title>${it.title}</title>
     </g>`;
   }).join('');
 
   document.getElementById('timelineWrap').innerHTML = `
   <svg viewBox="0 0 ${W} ${H}" class="timeline" role="img"
-       aria-label="Areas plotted by hours until dry and current wetness">
+       aria-label="Dryness timeline, ${TLTAB} view">
     <line x1="${P.l}" y1="${H - P.b}" x2="${plotR}" y2="${H - P.b}" stroke="var(--ink)"/>
     <line x1="${plotR + 8}" y1="${P.t}" x2="${plotR + 8}" y2="${H - P.b}" stroke="rgba(0,0,0,0.25)" stroke-dasharray="3 4"/>
     ${ticks.join('')}
     <text x="${plotR + laneW / 2}" y="${H - P.b + 20}" text-anchor="middle">NOT TODAY</text>
-    <text x="14" y="${P.t + 4}" class="axis-name">WETTER</text>
-    <text x="14" y="${H - P.b - 6}" class="axis-name">DRIER</text>
+    ${yAxis}
     <g class="legend">
       <circle cx="${plotR - 310}" cy="${P.t - 14}" r="5" fill="var(--dry)"/><text x="${plotR - 300}" y="${P.t - 10}">DRY</text>
       <circle cx="${plotR - 230}" cy="${P.t - 14}" r="5" fill="var(--drying)"/><text x="${plotR - 220}" y="${P.t - 10}">WILL BE DRY</text>
@@ -372,15 +435,20 @@ function renderTimeline() {
   document.getElementById('overviewSection').hidden = false;
 
   document.querySelectorAll('.tl-dot').forEach(el => {
-    const go = () => openDetail(decodeURIComponent(el.dataset.tl));
-    el.addEventListener('click', go);
-    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    const it = items[Number(el.dataset.i)];
+    if (!it) return;
+    el.addEventListener('click', it.go);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); it.go(); } });
   });
 
-  const gradeRow = document.getElementById('gradeFilter');
-  gradeRow.querySelectorAll('button').forEach(b =>
+  document.querySelectorAll('#chartTabs button').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === TLTAB));
+  document.getElementById('gradeFilter').hidden = TLTAB !== 'boulder';
+  document.getElementById('gradeFilter').querySelectorAll('button').forEach(b =>
     b.classList.toggle('active', b.dataset.grade === GRADE));
 }
+
+/* ---------- corridor map (SVG, no tiles, no dependencies) ---------- */
 
 function renderMap() {
   const W = 360, H = 620, PAD = 46;
@@ -400,10 +468,8 @@ function renderMap() {
   const x = lon => PAD + ((lon - minLon) / (maxLon - minLon)) * (W - 2 * PAD);
   const y = lat => PAD + ((maxLat - lat) / (maxLat - minLat)) * (H - 2 * PAD);
 
-  // Highway 99 spine: chapters south to north (payload is already in that order)
   const spine = chapters.map(c => `${x(c.lon).toFixed(1)},${y(c.lat).toFixed(1)}`).join(' L');
 
-  // label placement with de-collision: same-side labels get pushed apart vertically
   const placed = chapters.map(c => {
     const cx = x(c.lon), cy = y(c.lat);
     return { ...c, cx, cy, left: cx > W * 0.55, ly: cy + 4 };
@@ -439,7 +505,7 @@ function renderMap() {
   document.getElementById('overviewSection').hidden = false;
 
   document.querySelectorAll('.map-dot').forEach(el => {
-    const go = () => document.getElementById(`ch-${el.dataset.chapter}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const go = () => jumpToChapter(el.dataset.chapter);
     el.addEventListener('click', go);
     el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
   });
@@ -451,6 +517,7 @@ function openDetail(name) {
   const a = DATA.chapters.flatMap(c => c.areas).find(x => x.name === name);
   if (!a) return;
   const dlg = document.getElementById('detail');
+  let dlgView = 'week';
   const rows = a.dailyRainIn.map(d => {
     const today = d.date === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' });
     const day = new Date(d.date + 'T12:00').toLocaleDateString('en-US',
@@ -461,6 +528,11 @@ function openDetail(name) {
     `<p class="note"><span class="kicker">From the guidebook</span>“${n}”</p>`).join('');
   const seep = a.seepage.active
     ? `<p class="note"><span class="kicker">Seepage watch</span>Recent rain was heavy enough that cracks may weep until ~${fmtTime(a.seepage.until)}.</p>` : '';
+
+  const chart = mode => `${sparkSvg(a, { w: 640, h: 190, big: true, mode })}
+      <div class="axis-cap">${mode === 'today'
+        ? '<span>now</span><span>+12 h</span><span>+24 h</span>'
+        : '<span>7 days ago</span><span>now</span><span>+7 days</span>'}</div>`;
 
   dlg.innerHTML = `
     <div class="detail-body">
@@ -477,10 +549,11 @@ function openDetail(name) {
         <span class="conf ${a.confidence}">Forecast confidence: ${a.confidence}</span>
       </div>
       <p class="conf-note">${CONF_NOTE[a.confidence]}</p>
-      ${sparkSvg(a, { w: 640, h: 190, big: true })}
-      <div class="axis-cap">${VIEW === 'today'
-        ? '<span>now</span><span>+12 h</span><span>+24 h</span>'
-        : '<span>7 days ago</span><span>now</span><span>+7 days</span>'}</div>
+      <div class="dlg-tabs" role="group" aria-label="Chart window">
+        <button type="button" data-v="week" class="active">14 days</button>
+        <button type="button" data-v="today">Next 24 h</button>
+      </div>
+      <div id="dlgChart">${chart('week')}</div>
       ${seep}${notes}
       <table class="rain-table">
         <thead><tr><th>Day</th><th>Rain (in)</th><th>(mm)</th></tr></thead>
@@ -488,10 +561,17 @@ function openDetail(name) {
       </table>
     </div>`;
   dlg.querySelector('.close').addEventListener('click', () => dlg.close());
+  dlg.querySelectorAll('.dlg-tabs button').forEach(b =>
+    b.addEventListener('click', () => {
+      dlgView = b.dataset.v;
+      dlg.querySelector('#dlgChart').innerHTML = chart(dlgView);
+      dlg.querySelectorAll('.dlg-tabs button').forEach(x =>
+        x.classList.toggle('active', x.dataset.v === dlgView));
+    }));
   dlg.showModal();
 }
 
-/* ---------- search: areas + all 3,569 problem names ---------- */
+/* ---------- search: areas + all problem names ---------- */
 
 async function ensureProblems() {
   if (PROBLEMS) return PROBLEMS;
@@ -543,9 +623,11 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.searchbox')) document.getElementById('searchResults').hidden = true;
 });
 
-document.getElementById('viewToggle').addEventListener('click', () => {
-  VIEW = VIEW === 'week' ? 'today' : 'week';
-  render();
+document.getElementById('chartTabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  TLTAB = b.dataset.tab;
+  renderTimeline();
 });
 
 document.getElementById('gradeFilter').addEventListener('click', e => {

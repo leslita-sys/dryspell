@@ -35,7 +35,6 @@
         <div class="search-results" id="searchResults" hidden></div>
       </div>
       <div class="nav-links" id="navLinks"></div>
-      <button id="viewToggle" type="button" title="Switch between the 14-day window and the next 24 hours">View: Week</button>
     </div>
   </nav>
 
@@ -53,8 +52,13 @@
       </div>
       <div class="duo-col">
         <h2>Dry timeline</h2>
-        <p class="section-sub">Every area by when it goes dry and how wet it is now. Click a dot to open the area.</p>
-        <div class="grade-filter" id="gradeFilter" role="group" aria-label="Filter areas by grade">
+        <p class="section-sub">When the rock comes online. Click any dot.</p>
+        <div class="grade-filter chart-tabs" id="chartTabs" role="group" aria-label="Chart grouping">
+          <button type="button" data-tab="area" class="active">By area</button>
+          <button type="button" data-tab="boulder">By boulders</button>
+          <button type="button" data-tab="climb">By climb grade</button>
+        </div>
+        <div class="grade-filter" id="gradeFilter" hidden role="group" aria-label="Filter areas by grade">
           <button type="button" data-grade="all" class="active">All grades</button>
           <button type="button" data-grade="V0-2">V0&ndash;2</button>
           <button type="button" data-grade="V3-6">V3&ndash;6</button>
