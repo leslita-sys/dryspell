@@ -103,6 +103,31 @@ body {
   white-space: nowrap;
 }
 
+.countdown {
+  margin-top: 24px;
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.cd-label, .cd-who {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.cd-digits {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: clamp(40px, 6vw, 72px);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
 .meta-row {
   margin-top: 26px;
   display: flex;
@@ -407,6 +432,31 @@ main { padding-top: 20px; padding-bottom: 40px; }
 }
 
 .chapter-head::-webkit-details-marker { display: none; }
+
+.chapter-head h2 { flex: 1 1 auto; }
+
+.ch-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ch-status::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--wet);
+}
+
+.ch-status.dry::before { background: var(--dry); }
+.ch-status.drying::before { background: var(--drying); }
 
 .chapter-head::after {
   content: "− COLLAPSE";

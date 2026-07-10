@@ -44,6 +44,8 @@ function fmtTime(iso) {
   });
 }
 
+const shortChapter = c => c.replace(/^The /, '').replace(' Boulders', '');
+
 function hikeLabel(a) {
   if (!a.hike_min) return null;
   const range = a.hike_min_max ? `${a.hike_min}–${a.hike_min_max}` : `${a.hike_min}`;
@@ -166,7 +168,8 @@ function render() {
   const track = document.getElementById('betsTrack');
   track.innerHTML = DATA.bestBets.today.map((b, i) =>
     `<button class="bet" data-area="${encodeURIComponent(b.name)}" type="button">
-       <span class="rank">${i + 1}</span><span class="bname">${b.name}</span><span class="bwhen">${b.label}</span>
+       <span class="rank">${i + 1}</span><span class="bname">${b.name}</span>
+       <span class="bwhen">${shortChapter(b.chapter)} &middot; ${b.label}</span>
      </button>`).join('');
   bets.hidden = false;
 
@@ -176,13 +179,16 @@ function render() {
   document.getElementById('viewToggle').textContent = VIEW === 'week' ? 'View: Week' : 'View: Today';
 
   document.getElementById('chapters').innerHTML = DATA.chapters.map(c => `
-    <details class="chapter" id="ch-${slug(c.name)}" open>
+    <details class="chapter" id="ch-${slug(c.name)}">
       <summary class="chapter-head">
         <h2>${c.name}</h2>
+        <span class="ch-status ${chapterStatus(c)}">${chapterHeadline(c)}</span>
         <span class="count">${c.areas.length} areas</span>
       </summary>
       <div class="grid">${c.areas.map(cardHtml).join('')}</div>
     </details>`).join('');
+
+  renderCountdown();
 
   renderTimeline();
   renderMap();
@@ -233,6 +239,53 @@ function dryHours(a) {
   if (!a.verdict.dryAt) return Infinity;
   const idx = a.times.indexOf(a.verdict.dryAt);
   return idx >= 0 ? Math.max(0, idx - a.nowIndex) : Infinity;
+}
+
+function clockAtOffset(a, hoursFromNow) {
+  const t = a.times[Math.min(a.times.length - 1, a.nowIndex + Math.round(hoursFromNow))];
+  return new Date(t.slice(0, 10) + 'T' + t.slice(11) + ':00')
+    .toLocaleTimeString('en-US', { hour: 'numeric' });
+}
+
+function chapterHeadline(c) {
+  const status = chapterStatus(c);
+  if (status === 'dry') return 'Dry now';
+  if (status === 'wet') return 'Wet';
+  const finite = c.areas.map(dryHours).filter(h => Number.isFinite(h) && h > 0);
+  if (!finite.length) return 'Partly dry';
+  const avg = finite.reduce((s, v) => s + v, 0) / finite.length;
+  return `Dry ~${clockAtOffset(c.areas[0], avg)} avg`;
+}
+
+/* ---------- countdown to the first dry area ---------- */
+
+let countdownTimer = null;
+
+function renderCountdown() {
+  const el = document.getElementById('countdown');
+  clearInterval(countdownTimer);
+  const all = DATA.chapters.flatMap(c => c.areas);
+  if (all.some(a => a.verdict.status === 'dry')) { el.hidden = true; return; }
+  // same ranking as best bets, so the countdown names the same area as bet #1
+  const byName = new Map(all.map(a => [a.name, a]));
+  const drying = DATA.bestBets.today.map(b => byName.get(b.name))
+    .find(a => a && Number.isFinite(dryHours(a)) && dryHours(a) > 0);
+  if (!drying) { el.hidden = true; return; }
+  // nowIndex is the NEAREST hour to now, so anchor by rounding, not flooring
+  const anchor = Math.round(Date.now() / 3600e3) * 3600e3;
+  const target = anchor + dryHours(drying) * 3600e3;
+  const tick = () => {
+    const ms = target - Date.now();
+    if (ms <= 0) { el.querySelector('.cd-digits').textContent = 'NOW'; clearInterval(countdownTimer); return; }
+    const h = Math.floor(ms / 3600e3), m = Math.floor(ms / 60e3) % 60, s = Math.floor(ms / 1e3) % 60;
+    el.querySelector('.cd-digits').textContent =
+      `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+  el.querySelector('.cd-label').textContent = 'Countdown to dry rock';
+  el.querySelector('.cd-who').textContent = `${drying.name} first, ${drying.verdict.label.toLowerCase()}`;
+  el.hidden = false;
+  tick();
+  countdownTimer = setInterval(tick, 1000);
 }
 
 function bandCount(a, bandKey) {
