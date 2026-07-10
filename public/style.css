@@ -179,6 +179,7 @@ body {
 .dry-count { font-weight: 700; }
 .dry-count.zero { color: var(--wet); }
 .dry-count.pos { color: var(--dry); }
+.feed-down { color: var(--wet); font-weight: 700; }
 
 /* ---------- quicknav: sticky search + chapter links + view toggle ---------- */
 

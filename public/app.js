@@ -234,7 +234,7 @@ function render() {
   meta.innerHTML =
     `<span class="dry-count ${dryCount > 0 ? 'pos' : 'zero'}">${dryCount} of ${all.length} areas dry</span>` +
     ` · weather from ${t} Squamish time · updates every 15 minutes with each weather pull` +
-    (DATA.dataStale ? ' · FEED DOWN, SHOWING LAST GOOD DATA' : '');
+    (DATA.dataStale ? ' · <span class="feed-down">FEED DOWN, SHOWING LAST GOOD DATA</span>' : '');
   document.getElementById('tldr').textContent = DATA.tldr;
 
   const bets = document.getElementById('bestBets');
