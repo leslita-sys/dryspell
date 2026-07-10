@@ -511,7 +511,32 @@ function renderMap() {
 
 /* ---------- detail dialog ---------- */
 
-function openDetail(name) {
+const gradeNum = g => g === 'VB' ? -1 : g === 'VH' ? 99 : Number(g.replace(/[V+-]/g, ''));
+const gradeBandOf = g => {
+  const n = gradeNum(g);
+  return n >= 10 ? 'V10+' : n >= 7 ? 'V7-9' : n >= 3 ? 'V3-6' : 'V0-2';
+};
+
+function climbsHtml(areaName) {
+  const list = (PROBLEMS || []).filter(p => p.a === areaName);
+  if (!list.length) return '';
+  const sorted = [...list].sort((x, y) => {
+    const gx = x.g ? gradeNum(x.g) : 100, gy = y.g ? gradeNum(y.g) : 100;
+    return gx - gy || x.n.localeCompare(y.n);
+  });
+  const items = sorted.map(p => `
+    <li>${p.g ? `<span class="gdot" style="background:${BAND_COLOR[gradeBandOf(p.g)]}"></span>` : '<span class="gdot gdot-unknown"></span>'}
+      <span class="climb-name">${p.n}</span>${p.g ? `<span class="climb-grade">${p.g}</span>` : ''}
+    </li>`).join('');
+  return `
+  <details class="climbs">
+    <summary>Climbs (${list.length})</summary>
+    <ul class="climb-list">${items}</ul>
+  </details>`;
+}
+
+async function openDetail(name) {
+  await ensureProblems();
   const a = DATA.chapters.flatMap(c => c.areas).find(x => x.name === name);
   if (!a) return;
   const dlg = document.getElementById('detail');
@@ -557,6 +582,7 @@ function openDetail(name) {
         <thead><tr><th>Day</th><th>Rain (in)</th><th>(mm)</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      ${climbsHtml(a.name)}
     </div>`;
   dlg.querySelector('.close').addEventListener('click', () => dlg.close());
   dlg.querySelectorAll('.dlg-tabs button').forEach(b =>
@@ -589,7 +615,7 @@ function runSearch(q) {
   const probs = (PROBLEMS || [])
     .filter(p => p.n.toLowerCase().includes(q))
     .slice(0, 8)
-    .map(p => ({ kind: 'PROBLEM', label: p.n, sub: `${p.a} · ${p.c}`, area: p.a }));
+    .map(p => ({ kind: 'PROBLEM', label: p.n + (p.g ? ` ${p.g}` : ''), sub: `${p.a} · ${p.c}`, area: p.a }));
   const results = [...areas, ...probs].slice(0, 12);
   if (!results.length) {
     box.innerHTML = '<div class="search-empty">No matches</div>';

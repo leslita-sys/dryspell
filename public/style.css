@@ -733,6 +733,62 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 
 .rain-table .today-row { font-weight: 700; }
 
+/* ---------- climbs disclosure in the area dialog ---------- */
+
+.climbs { margin-top: 22px; }
+
+.climbs summary {
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 10px 0;
+  border-top: var(--hairline);
+  border-bottom: var(--hairline-soft);
+}
+
+.climbs summary::-webkit-details-marker { display: none; }
+.climbs summary::after { content: "\00a0\00a0+ expand"; color: var(--ink-mut); font-weight: 400; }
+.climbs[open] summary::after { content: "\00a0\00a0\2212 collapse"; }
+
+.climb-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  column-gap: 28px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.climb-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  break-inside: avoid;
+}
+
+.gdot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  align-self: center;
+}
+
+.gdot-unknown { background: none; border: 1px solid var(--ink-mut); }
+
+.climb-name { min-width: 0; overflow-wrap: anywhere; }
+.climb-grade { margin-left: auto; color: var(--ink-soft); }
+
+@media (max-width: 560px) {
+  .climb-list { columns: 1; }
+}
+
 /* ---------- failure state: mono in a hairline box ---------- */
 
 .fail {
