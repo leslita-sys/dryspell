@@ -49,21 +49,28 @@
         <div class="map-wrap" id="mapWrap"></div>
       </div>
       <div class="duo-col">
-        <h2>Dry timeline</h2>
-        <p class="section-sub">When the rock comes online. Click any dot.</p>
-        <div class="grade-filter chart-tabs" id="chartTabs" role="group" aria-label="Chart grouping">
-          <button type="button" data-tab="area" class="active">By area</button>
-          <button type="button" data-tab="boulder">By boulders</button>
-          <button type="button" data-tab="climb">By climb grade</button>
+        <div class="forecast-block" id="forecastBlock" hidden>
+          <h2>Today's forecast</h2>
+          <p class="section-sub" id="forecastSub"></p>
+          <div class="map-wrap" id="forecastWrap"></div>
         </div>
-        <div class="grade-filter" id="gradeFilter" hidden role="group" aria-label="Filter areas by grade">
-          <button type="button" data-grade="all" class="active">All grades</button>
-          <button type="button" data-grade="V0-2">V0&ndash;2</button>
-          <button type="button" data-grade="V3-6">V3&ndash;6</button>
-          <button type="button" data-grade="V7-9">V7&ndash;9</button>
-          <button type="button" data-grade="V10+">V10+</button>
+        <div class="tl-block">
+          <h2>Dry timeline</h2>
+          <p class="section-sub">When the rock comes online. Click any dot.</p>
+          <div class="grade-filter chart-tabs" id="chartTabs" role="group" aria-label="Chart grouping">
+            <button type="button" data-tab="area" class="active">By area</button>
+            <button type="button" data-tab="boulder">By boulders</button>
+            <button type="button" data-tab="climb">By climb grade</button>
+          </div>
+          <div class="grade-filter" id="gradeFilter" hidden role="group" aria-label="Filter areas by grade">
+            <button type="button" data-grade="all" class="active">All grades</button>
+            <button type="button" data-grade="V0-2">V0&ndash;2</button>
+            <button type="button" data-grade="V3-6">V3&ndash;6</button>
+            <button type="button" data-grade="V7-9">V7&ndash;9</button>
+            <button type="button" data-grade="V10+">V10+</button>
+          </div>
+          <div class="map-wrap" id="timelineWrap"></div>
         </div>
-        <div class="map-wrap" id="timelineWrap"></div>
       </div>
     </div>
   </section>

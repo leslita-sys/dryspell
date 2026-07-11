@@ -31,7 +31,7 @@ The server is stateless. Nothing persists except a last-good weather cache (`dat
 
 ## Interface
 
-Today's Beta one-liner. Countdown to the first dry area. Best bets ranked by dryness. Corridor map, zones colored dry / will-be-dry / wet. Dry-timeline chart, tabbed: by area, by boulders (grade-filterable), by climb grade. Search across areas and every problem name. Collapsible chapters with live dry-range headlines. Per-area detail with a 14-day / next-24h chart toggle. Inches first, mm second.
+Today's Beta one-liner. Countdown to the first dry area. Best bets ranked by dryness. Corridor map, zones colored dry / will-be-dry / wet. Today's forecast strip: hourly temp, rain bars, and a humidity band (drier air = better friction), corridor-wide. Dry-timeline chart, tabbed: by area, by boulders (grade-filterable), by climb grade. Search across areas and every problem name. Collapsible chapters with live dry-range headlines. Per-area detail with a 14-day / next-24h chart toggle. Inches first, mm second.
 
 ## Data
 

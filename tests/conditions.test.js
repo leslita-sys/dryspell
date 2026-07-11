@@ -56,6 +56,29 @@ test('recent rain yields wet/drying with dry-time labels', async () => {
   if (drying) assert.match(drying.verdict.label, /^Dry (today|[A-Z][a-z]{2}) ~\d{1,2} (AM|PM)$/);
 });
 
+test('todayForecast covers today with temp, humidity, wind, sun and rain', async () => {
+  _reset();
+  const p = await buildConditions({ fetchImpl: fakeFetch(false) });
+  const f = p.todayForecast;
+  assert.ok(f && Array.isArray(f.hours) && f.hours.length >= 1 && f.hours.length <= 24);
+  assert.ok(f.hours.every(h => h.time.startsWith(f.date)));
+  assert.ok(f.nowIndex >= 0 && f.nowIndex < f.hours.length);
+  const h = f.hours[f.nowIndex];
+  assert.strictEqual(h.tempC, 18);
+  assert.strictEqual(h.humidity, 55);
+  assert.strictEqual(h.windKmh, 10);
+  assert.strictEqual(h.precipMm, 0);
+});
+
+test('todayForecast rain takes the wettest cell, blended like the areas', async () => {
+  _reset();
+  // only ECMWF saw rain in the past -> blended halves it to 0.7 mm/h
+  const p = await buildConditions({ fetchImpl: fakeFetch(true, { ecmwfOnlyRain: true }) });
+  const rainy = p.todayForecast.hours.filter(h => h.precipMm > 0);
+  if (rainy.length) rainy.forEach(h => assert.ok(Math.abs(h.precipMm - 0.7) < 0.01,
+    `expected halved lone-model rain, got ${h.precipMm}`));
+});
+
 test('verdictLabel formats Vancouver-local weekday and hour', () => {
   assert.match(verdictLabel('2026-07-18T13:00'), /^Dry (today|Sat) ~1 PM$/);
 });

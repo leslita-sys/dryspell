@@ -296,6 +296,7 @@ function render() {
     </details>`).join('');
 
   renderCountdown();
+  renderForecast();
   renderTimeline();
   renderMap();
 
@@ -318,6 +319,142 @@ function jumpToArea(areaName) {
   row.scrollIntoView({ behavior: 'smooth', block: 'center' });
   row.classList.add('flash');
   setTimeout(() => row.classList.remove('flash'), 2000);
+}
+
+/* ---------- today's forecast: temp line + rain bars + humidity strip ---------- */
+
+// from the hour digits directly — a Date round-trip shifts on the VIEWER's
+// DST-change dates even when Vancouver didn't skip that hour
+const hourLabel = t => {
+  const h = Number(t.slice(11, 13));
+  return h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`;
+};
+
+function renderForecast() {
+  const f = DATA.todayForecast;
+  const block = document.getElementById('forecastBlock');
+  if (!f || !f.hours?.length || f.hours.every(h => h.tempC == null)) {
+    block.hidden = true;
+    return;
+  }
+  const hs = f.hours, n = hs.length, nowI = Math.max(0, f.nowIndex);
+  const W = 1000, H = 258, P = { l: 46, r: 46, t: 36, b: 88 };
+  const base = H - P.b;
+  const x = i => P.l + (i / Math.max(1, n - 1)) * (W - P.l - P.r);
+  const colW = (W - P.l - P.r) / Math.max(1, n - 1);
+
+  const tempsF = hs.map(h => h.tempC == null ? null : Math.round(h.tempC * 9 / 5 + 32));
+  const known = tempsF.filter(v => v != null);
+  const hi = Math.max(...known), lo = Math.min(...known);
+  const pad = Math.max(2, (hi - lo) * 0.2);
+  const yT = v => base - 8 - ((v - (lo - pad)) / (hi - lo + 2 * pad)) * (base - P.t - 16);
+
+  // temp line, dimmed for hours already behind us (same idiom as the sparklines)
+  let past = '', future = '';
+  tempsF.forEach((v, i) => {
+    if (v == null) return;
+    const pt = `${x(i).toFixed(1)},${yT(v).toFixed(1)}`;
+    if (i <= nowI) past += (past ? ' L' : 'M') + pt;
+    if (i >= nowI) future += (future ? ' L' : 'M') + pt;
+  });
+
+  // rain bars cap at 5 mm/h, the same cap the sparklines use
+  const maxRainMm = 5;
+  const bars = hs.map((h, i) => {
+    const mm = h.precipMm ?? 0;
+    if (mm <= 0.05) return '';
+    const bh = Math.min(1, mm / maxRainMm) * (base - P.t) * 0.6;
+    return `<rect x="${(x(i) - 3).toFixed(1)}" y="${(base - bh).toFixed(1)}" width="6" height="${bh.toFixed(1)}" fill="var(--rain)" opacity="0.55"/>`;
+  }).join('');
+
+  // humidity strip under the axis: drier air = lighter = better friction;
+  // cells clamp to the plot edges so the band lines up with the axis above
+  const cellX = i => Math.max(P.l, x(i) - colW / 2);
+  const cellW = i => Math.min(W - P.r, x(i) + colW / 2) - cellX(i);
+  const stripY = base + 34, stripH = 15;
+  const strip = hs.map((h, i) => h.humidity == null ? '' :
+    `<rect x="${cellX(i).toFixed(1)}" y="${stripY}" width="${(cellW(i) + 0.5).toFixed(1)}" height="${stripH}" fill="var(--rain)" opacity="${(h.humidity / 100 * 0.8).toFixed(2)}"/>`
+  ).join('');
+  const humLabels = hs.map((h, i) =>
+    (i % 6 === 3 && h.humidity != null)
+      ? `<text x="${x(i).toFixed(1)}" y="${stripY + stripH + 14}" text-anchor="middle" class="tick-clock">${h.humidity}%</text>` : ''
+  ).join('');
+
+  // hour ticks every 3h; NOW is always labeled, muting any hour label beside it
+  const ticks = hs.map((h, i) => {
+    if (i % 3) return '';
+    const line = `<line x1="${x(i).toFixed(1)}" y1="${P.t}" x2="${x(i).toFixed(1)}" y2="${base}" stroke="rgba(0,0,0,0.08)"/>`;
+    return Math.abs(i - nowI) < 2 ? line :
+      line + `<text x="${x(i).toFixed(1)}" y="${base + 20}" text-anchor="middle">${hourLabel(h.time)}</text>`;
+  }).join('') +
+    `<text x="${x(nowI).toFixed(1)}" y="${base + 20}" text-anchor="middle">NOW</text>`;
+
+  // direct labels on the day's high and low; lo stays clear of the axis
+  const hiI = tempsF.indexOf(hi), loI = tempsF.indexOf(lo);
+  const degLabels =
+    `<text x="${x(hiI).toFixed(1)}" y="${(yT(hi) - 9).toFixed(1)}" text-anchor="middle" class="deg">${hi}°</text>` +
+    (loI !== hiI ? `<text x="${x(loI).toFixed(1)}" y="${Math.min(base - 5, yT(lo) + 18).toFixed(1)}" text-anchor="middle" class="deg">${lo}°</text>` : '');
+
+  // invisible per-hour hover targets with the full reading
+  const hover = hs.map((h, i) => {
+    const mm = h.precipMm ?? 0;
+    const bits = [hourLabel(h.time),
+      tempsF[i] != null ? `${tempsF[i]}°F` : null,
+      h.humidity != null ? `${h.humidity}% humidity` : null,
+      mm > 0.05 ? `${(mm / 25.4).toFixed(2)}″ rain (${mm} mm)` : 'no rain',
+      h.windKmh != null ? `wind ${h.windKmh} km/h` : null].filter(Boolean);
+    return `<rect x="${cellX(i).toFixed(1)}" y="${P.t}" width="${cellW(i).toFixed(1)}" height="${stripY + stripH - P.t}" fill="transparent"><title>${bits.join(' · ')}</title></rect>`;
+  }).join('');
+
+  const nowX = x(nowI).toFixed(1);
+  document.getElementById('forecastWrap').innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" class="fc" role="img" aria-label="Today's hourly forecast: temperature, rain and humidity">
+    <g class="legend">
+      <rect x="${P.l}" y="9" width="18" height="2.5" fill="var(--ink)"/><text x="${P.l + 24}" y="15">TEMP °F</text>
+      <rect x="${P.l + 110}" y="4" width="7" height="12" fill="var(--rain)" opacity="0.55"/><text x="${P.l + 123}" y="15">RAIN</text>
+      <rect x="${P.l + 190}" y="4" width="14" height="12" fill="var(--rain)" opacity="0.3"/><text x="${P.l + 210}" y="15">HUMIDITY (LOWER = BETTER FRICTION)</text>
+    </g>
+    ${ticks}
+    <line x1="${P.l}" y1="${base}" x2="${W - P.r}" y2="${base}" stroke="var(--ink)"/>
+    ${bars}
+    <line x1="${nowX}" y1="${P.t}" x2="${nowX}" y2="${base}" stroke="rgba(0,0,0,0.45)" stroke-width="1" stroke-dasharray="2 3"/>
+    <path d="${past}" fill="none" stroke="var(--ink)" stroke-width="2" opacity="0.3"/>
+    <path d="${future}" fill="none" stroke="var(--ink)" stroke-width="2"/>
+    ${degLabels}
+    ${strip}
+    ${humLabels}
+    ${hover}
+  </svg>`;
+
+  // summary line: the numbers a climber decides with.
+  // Rain sums each hour's WETTEST grid cell, so it's a corridor worst case —
+  // say "up to", never present it as any one area's total.
+  const rainIn = hs.reduce((s, h) => s + (h.precipMm ?? 0), 0) / 25.4;
+  const rest = hs.slice(nowI); // "driest air" must point at an hour still ahead
+  const hums = rest.map(h => h.humidity).filter(v => v != null);
+  const minHum = hums.length ? Math.min(...hums) : null;
+  const midday = hs.filter(h => {
+    const hr = Number(h.time.slice(11, 13));
+    return hr >= 10 && hr <= 16;
+  });
+  const avgOf = vals => vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+  const cloud = avgOf(midday.map(h => h.cloudPct).filter(v => v != null));
+  const radAvg = avgOf(midday.map(h => h.radiation).filter(v => v != null));
+  // cloud cover is season-proof; radiation thresholds (July-tuned) only carry
+  // stale cached data from before cloud_cover was fetched
+  const sky = cloud != null
+    ? (cloud < 30 ? 'sunny' : cloud < 70 ? 'sun + cloud' : 'overcast')
+    : radAvg == null ? null : radAvg >= 450 ? 'sunny' : radAvg >= 200 ? 'sun + cloud' : 'overcast';
+  const day = new Date(f.date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long' });
+  const parts = [day, `hi ${hi}°F / lo ${lo}°F`,
+    rainIn >= 0.005 ? `up to ${rainIn.toFixed(2)}″ rain` : 'no rain'];
+  if (minHum != null) {
+    const bestI = nowI + rest.findIndex(h => h.humidity === minHum);
+    parts.push(`driest air ${minHum}% ~${hourLabel(hs[bestI].time)}`);
+  }
+  if (sky) parts.push(sky);
+  document.getElementById('forecastSub').textContent = parts.join(' · ');
+  block.hidden = false;
 }
 
 /* ---------- dry timeline: tabbed scatter (area / boulder / climb) ---------- */
@@ -485,7 +622,22 @@ function renderTimeline() {
 /* ---------- corridor map (SVG, no tiles, no dependencies) ---------- */
 
 function renderMap() {
-  const W = 360, H = 620, PAD = 46;
+  const W = 360, PAD = 46;
+  // Size the map box to the right column's natural height so both boxes share
+  // a bottom edge. Measure the forecast + timeline blocks, never the map's own
+  // box: measuring ourselves would ratchet the height up, and clearing the map
+  // to avoid that made Chrome's scroll anchoring yank the page on re-renders.
+  const wrap = document.getElementById('mapWrap');
+  let H = 620;
+  if (!window.matchMedia('(max-width: 1000px)').matches) {
+    const col = wrap.parentElement;
+    const right = document.getElementById('forecastBlock').parentElement;
+    const target = [...right.children].reduce((s, el) => s + el.offsetHeight, 0);
+    const headH = wrap.getBoundingClientRect().top - col.getBoundingClientRect().top;
+    const innerW = wrap.clientWidth - 20;                  // box padding
+    const innerH = target - headH - 22;                    // padding + border
+    if (innerW > 100 && innerH > 300) H = Math.round(W * innerH / innerW);
+  }
   const chapters = DATA.chapters.map(c => {
     const lats = c.areas.map(a => a.lat), lons = c.areas.map(a => a.lon);
     return {
@@ -697,6 +849,15 @@ document.getElementById('gradeFilter').addEventListener('click', e => {
   GRADE = b.dataset.grade;
   renderTimeline();
 });
+
+// keep the corridor box bottom-aligned with the timeline box across resizes
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (DATA) renderMap(); }, 150);
+});
+// web fonts land after first paint and nudge the measured column heights
+if (document.fonts?.ready) document.fonts.ready.then(() => { if (DATA) renderMap(); });
 
 const dlgEl = document.getElementById('detail');
 dlgEl.addEventListener('click', e => { if (e.target === dlgEl) dlgEl.close(); });
