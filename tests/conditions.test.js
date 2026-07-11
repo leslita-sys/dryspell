@@ -28,6 +28,7 @@ function fakeFetch(rainy, { ecmwfOnlyRain = false } = {}) {
           return h >= 7 && h <= 19 ? 500 : 0;
         }),
         precipitation_ecmwf_ifs025: time.map((_, i) => (rainy && i < 160 ? 1.4 : 0)),
+        precipitation_icon_seamless: time.map((_, i) => (rainy && !ecmwfOnlyRain && i < 160 ? 1.3 : 0)),
       };
       // one hourly block per unique cell — return plenty
       return Array.from({ length: 30 }, () => ({ hourly: JSON.parse(JSON.stringify(hourly)) }));
@@ -66,11 +67,16 @@ test('verdictLabel never calls a same-weekday date next week "today"', () => {
   assert.ok(!label.includes('today'), `same weekday next week labeled: ${label}`);
 });
 
-test('ECMWF-only past rain still wets the bucket (conservative blend)', async () => {
+test('single-model past rain still wets the bucket, at half strength', async () => {
   _reset();
   const p = await buildConditions({ fetchImpl: fakeFetch(true, { ecmwfOnlyRain: true }) });
   const all = p.chapters.flatMap(c => c.areas);
   assert.ok(all.some(a => a.verdict.status !== 'dry'),
-    'GEM said dry but ECMWF said rain; verdicts must not all read dry');
+    'only ECMWF saw rain; a lone-model storm must never vanish entirely');
+  // avg of two wettest of (0, 1.4, 0) = 0.7/h — half of ECMWF's claim
+  const a = all[0];
+  const rainyHour = a.precipHourly.findIndex(v => v > 0);
+  assert.ok(rainyHour >= 0 && Math.abs(a.precipHourly[rainyHour] - 0.7) < 0.01,
+    `phantom hour should be halved, got ${a.precipHourly[rainyHour]}`);
   assert.ok(typeof p.tldr === 'string' && p.tldr.length > 20, 'tldr present');
 });

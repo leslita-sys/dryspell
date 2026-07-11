@@ -24,6 +24,7 @@ function fakeResponse(nCells) {
       wind_speed_10m_gem_seamless: Array(n).fill(8),
       shortwave_radiation_gem_seamless: Array(n).fill(300),
       precipitation_ecmwf_ifs025: zeros,
+      precipitation_icon_seamless: zeros,
     };
   };
   return Array.from({ length: nCells }, () => ({ hourly: hourly() }));

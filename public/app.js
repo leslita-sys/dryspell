@@ -11,9 +11,9 @@ const SUN_LABEL = {
 };
 
 const CONF_NOTE = {
-  HIGH: 'Canadian GEM and European ECMWF models agree on the week ahead.',
-  MEDIUM: 'Forecast models mostly agree; timing of rain may shift.',
-  LOW: 'GEM and ECMWF disagree on incoming rain — trust the next 24h, doubt the rest.',
+  HIGH: 'GEM, ECMWF and ICON forecast models agree on the week ahead.',
+  MEDIUM: 'The three forecast models mostly agree; timing of rain may shift.',
+  LOW: 'The forecast models disagree on incoming rain — trust the next 24h, doubt the rest.',
 };
 
 let DATA = null;
@@ -618,7 +618,7 @@ async function openDetail(name) {
         <thead><tr><th>Day</th><th>Rain (in)</th><th>(mm)</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="table-note">Past days show the wetter of the two forecast models — deliberately cautious, so wet rock never gets called dry.</p>
+      <p class="table-note">Past days lean wet: shown rain averages the two wettest of three forecast models, so wet rock never gets called dry.</p>
       ${climbsHtml(a.name)}
     </div>`;
   dlg.querySelector('.close').addEventListener('click', () => dlg.close());
