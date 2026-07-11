@@ -301,6 +301,14 @@ body {
 
 .best-bets { padding-top: 44px; }
 
+.bets-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
 .bets-track {
   margin-top: 18px;
   display: flex;

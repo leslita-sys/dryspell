@@ -246,10 +246,6 @@ function render() {
      </button>`).join('');
   bets.hidden = false;
 
-  document.getElementById('navLinks').innerHTML = DATA.chapters.map(c =>
-    `<a href="#ch-${slug(c.name)}" data-nav="${slug(c.name)}">${c.name}</a>`).join('');
-  document.getElementById('quicknav').hidden = false;
-
   document.getElementById('chapters').innerHTML = DATA.chapters.map(c => `
     <details class="chapter" id="ch-${slug(c.name)}">
       <summary class="chapter-head">
@@ -266,11 +262,6 @@ function render() {
 
   document.querySelectorAll('[data-area]').forEach(el =>
     el.addEventListener('click', () => openDetail(decodeURIComponent(el.dataset.area))));
-  document.querySelectorAll('[data-nav]').forEach(el =>
-    el.addEventListener('click', e => {
-      e.preventDefault();
-      jumpToChapter(el.dataset.nav);
-    }));
 }
 
 function jumpToChapter(chSlug) {
