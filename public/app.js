@@ -618,6 +618,7 @@ async function openDetail(name) {
         <thead><tr><th>Day</th><th>Rain (in)</th><th>(mm)</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      <p class="table-note">Past days show the wetter of the two forecast models — deliberately cautious, so wet rock never gets called dry.</p>
       ${climbsHtml(a.name)}
     </div>`;
   dlg.querySelector('.close').addEventListener('click', () => dlg.close());
