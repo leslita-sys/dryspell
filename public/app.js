@@ -196,11 +196,50 @@ function chapterHeadline(c) {
 
 let countdownTimer = null;
 
+function tomorrowLine(all) {
+  const ref = all[0];
+  const today = ref.times[ref.nowIndex].slice(0, 10);
+  const tomorrow = ref.times.map(t => t.slice(0, 10)).find(d => d > today);
+  if (!tomorrow) return '';
+  let dryAtNoon = 0;
+  for (const a of all) {
+    const i = a.times.findIndex(t => t.startsWith(tomorrow) && t.slice(11, 13) === '12');
+    if (i >= 0 && a.series[i] <= 0.05) dryAtNoon++;
+  }
+  const rainMax = Math.max(...all.map(a =>
+    a.dailyRainIn.find(d => d.date === tomorrow)?.inches ?? 0));
+  const day = new Date(tomorrow + 'T12:00').toLocaleDateString('en-US', { weekday: 'long' });
+  const rainBit = rainMax > 0.01 ? `up to ${rainMax}″ rain` : 'no rain forecast';
+  return `Tomorrow (${day}): ${dryAtNoon} of ${all.length} areas dry by noon · ${rainBit}`;
+}
+
 function renderCountdown() {
   const el = document.getElementById('countdown');
   clearInterval(countdownTimer);
   const all = DATA.chapters.flatMap(c => c.areas);
-  if (all.some(a => a.verdict.status === 'dry')) { el.hidden = true; return; }
+  const digits = el.querySelector('.cd-digits');
+  digits.classList.remove('cd-word', 'good', 'warn', 'bad');
+  document.getElementById('tomorrowLine').textContent = tomorrowLine(all);
+
+  const dryCount = all.filter(a => a.verdict.status === 'dry').length;
+  const raining = all.some(a => a.rainingNow);
+  if (dryCount > 0 || raining || !all.some(a => Number.isFinite(dryHours(a)) && dryHours(a) > 0)) {
+    // nothing to count down to (or no point) — show the at-a-glance verdict instead
+    const n = all.length;
+    let word, cls;
+    if (raining) { word = 'Raining'; cls = 'bad'; }
+    else if (dryCount === n) { word = 'Dry'; cls = 'good'; }
+    else if (dryCount >= (n * 2) / 3) { word = 'Mostly dry'; cls = 'good'; }
+    else if (dryCount >= n / 3) { word = 'Mixed'; cls = 'warn'; }
+    else if (dryCount > 0) { word = 'Mostly wet'; cls = 'warn'; }
+    else { word = 'Wet'; cls = 'bad'; }
+    el.querySelector('.cd-label').textContent = 'Conditions';
+    digits.textContent = word;
+    digits.classList.add('cd-word', cls);
+    el.querySelector('.cd-who').textContent = `${dryCount} of ${n} areas dry`;
+    el.hidden = false;
+    return;
+  }
   // same ranking as best bets, so the countdown names the same area as bet #1
   const byName = new Map(all.map(a => [a.name, a]));
   const drying = DATA.bestBets.today.map(b => byName.get(b.name))
@@ -349,17 +388,23 @@ function renderTimeline() {
   const wetMax = Math.max(0.05, ...items.map(it => it.yv));
   const yOf = it => H - P.b - (it.yv / wetMax) * (H - P.t - P.b);
 
-  // spiral collision relief so piled dots stay individually clickable
+  // spiral collision relief so piled dots stay individually clickable;
+  // clamp to the plot (or the not-today lane) so nothing bleeds past the axes
   const placed = [];
   const pos = it => {
-    let px = xOf(it.hrs), py = yOf(it);
+    const inLane = it.hrs === null;
+    const xmin = (inLane ? plotR + 18 : P.l + 2) + it.r;
+    const xmax = (inLane ? W - 6 : plotR - 2) - it.r;
+    const clampX = v => Math.min(xmax, Math.max(xmin, v));
+    const clampY = v => Math.min(H - P.b - 2 - it.r, Math.max(P.t + 2 + it.r, v));
+    let px = clampX(xOf(it.hrs)), py = clampY(yOf(it));
     for (let k = 0; k < 80; k++) {
       const rr = (it.r + 8);
       const hit = placed.some(p => (p[0] - px) ** 2 + (p[1] - py) ** 2 < rr ** 2);
       if (!hit) break;
       const ang = k * 2.4, rad = 9 + k * 2.1;
-      px = Math.min(W - 12, Math.max(14, xOf(it.hrs) + rad * Math.cos(ang)));
-      py = Math.min(H - P.b - 8, Math.max(P.t + 8, yOf(it) + rad * Math.sin(ang)));
+      px = clampX(xOf(it.hrs) + rad * Math.cos(ang));
+      py = clampY(yOf(it) + rad * Math.sin(ang));
     }
     placed.push([px, py]);
     return [px, py];

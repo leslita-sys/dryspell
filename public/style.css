@@ -142,6 +142,27 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.cd-digits.cd-word {
+  font-size: clamp(38px, 5.5vw, 72px);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.cd-word.good { color: var(--dry); }
+.cd-word.warn { color: var(--drying); }
+.cd-word.bad { color: var(--wet); }
+
+.cd-tomorrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-mut);
+  border-top: var(--hairline-soft);
+  padding-top: 8px;
+}
+
 @media (max-width: 900px) {
   .countdown { align-items: flex-start; text-align: left; margin-top: 8px; }
 }
